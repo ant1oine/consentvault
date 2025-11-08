@@ -1,6 +1,6 @@
 """Policy service."""
-from sqlalchemy.orm import Session
 from sqlalchemy import and_
+from sqlalchemy.orm import Session
 
 from apps.api.app.models.policy import Policy
 from apps.api.app.models.purpose import Purpose

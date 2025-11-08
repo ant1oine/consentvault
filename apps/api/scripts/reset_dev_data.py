@@ -14,22 +14,23 @@ import sys
 import time
 from contextlib import closing
 from pathlib import Path
-from typing import Any, Dict, Optional, Type
+from typing import Any
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-from sqlalchemy import create_engine, text
 import enum
 
-# Import all enum classes from models
-from apps.api.app.models.organization import OrganizationStatus, DataRegion
-from apps.api.app.models.user import UserRole
-from apps.api.app.models.consent import ConsentStatus, ConsentMethod
-from apps.api.app.models.rights import DataRight, RequestStatus
-from apps.api.app.models.webhook import DeliveryStatus
-from apps.api.app.models.api_key import ApiKeyRole
+from sqlalchemy import create_engine, text
 
+from apps.api.app.models.api_key import ApiKeyRole
+from apps.api.app.models.consent import ConsentMethod, ConsentStatus
+
+# Import all enum classes from models
+from apps.api.app.models.organization import DataRegion, OrganizationStatus
+from apps.api.app.models.rights import DataRight, RequestStatus
+from apps.api.app.models.user import UserRole
+from apps.api.app.models.webhook import DeliveryStatus
 from apps.api.app.utils.ids import generate_ulid
 
 
@@ -52,10 +53,10 @@ def print_colored(message: str, color: str = Colors.RESET) -> None:
 
 
 # Enum cache to avoid repeated lookups
-_enum_cache: Dict[str, Any] = {}
+_enum_cache: dict[str, Any] = {}
 
 
-def get_enum_value(enum_class: Type[enum.Enum], desired_label: str, prefer_name: bool = True) -> Optional[str]:
+def get_enum_value(enum_class: type[enum.Enum], desired_label: str, prefer_name: bool = True) -> str | None:
     """
     Get enum value by case-insensitive label matching.
     
@@ -78,10 +79,10 @@ def get_enum_value(enum_class: Type[enum.Enum], desired_label: str, prefer_name:
     cache_key = f"{enum_class.__name__}.{desired_label.lower()}"
     if cache_key in _enum_cache:
         return _enum_cache[cache_key]
-    
+
     desired_lower = desired_label.lower()
     desired_upper = desired_label.upper()
-    
+
     # Strategy 1: Try exact match first (case-sensitive)
     for member in enum_class:
         if member.name == desired_label or str(member.value) == desired_label:
@@ -89,21 +90,21 @@ def get_enum_value(enum_class: Type[enum.Enum], desired_label: str, prefer_name:
             result = member.name if prefer_name else str(member.value)
             _enum_cache[cache_key] = result
             return result
-    
+
     # Strategy 2: Try case-insensitive match on member name (most common for DB enums)
     for member in enum_class:
         if member.name.upper() == desired_upper:
             result = member.name if prefer_name else str(member.value)
             _enum_cache[cache_key] = result
             return result
-    
+
     # Strategy 3: Try case-insensitive match on value
     for member in enum_class:
         if str(member.value).lower() == desired_lower:
             result = member.name if prefer_name else str(member.value)
             _enum_cache[cache_key] = result
             return result
-    
+
     # Not found
     print_colored(
         f"⚠️  Warning: '{desired_label}' not found in {enum_class.__name__}. "
@@ -140,7 +141,7 @@ def get_db_enum_values(conn, enum_name: str) -> list[str]:
             {"enum_name": enum_name}
         )
         return [row[0] for row in result.fetchall()]
-    except Exception as e:
+    except Exception:
         return []
 
 
@@ -153,7 +154,7 @@ def verify_enum_consistency(conn) -> bool:
     """
     print_colored("⚙️  ENUM CONSISTENCY CHECK", Colors.CYAN + Colors.BOLD)
     print()
-    
+
     # Map of enum type names in DB to Python enum classes
     enum_mappings = {
         "organizationstatus": OrganizationStatus,
@@ -166,12 +167,12 @@ def verify_enum_consistency(conn) -> bool:
         "deliverystatus": DeliveryStatus,
         "apikeyrole": ApiKeyRole,
     }
-    
+
     all_consistent = True
-    
+
     for db_enum_name, python_enum_class in enum_mappings.items():
         db_values = get_db_enum_values(conn, db_enum_name)
-        
+
         if not db_values:
             # Enum might not exist in DB yet (e.g., if migrations haven't run)
             print_colored(
@@ -179,24 +180,24 @@ def verify_enum_consistency(conn) -> bool:
                 Colors.YELLOW
             )
             continue
-        
+
         # Get Python enum values (both names and values, normalized to uppercase for comparison)
         python_names = {m.name.upper() for m in python_enum_class}
         python_values = {str(m.value).upper() for m in python_enum_class}
         db_values_upper = {v.upper() for v in db_values}
-        
+
         # Check if DB values match Python enum names (most common case with SQLAlchemy)
         matches_names = db_values_upper.intersection(python_names)
         # Check if DB values match Python enum values
         matches_values = db_values_upper.intersection(python_values)
-        
+
         # Also check if all DB values have corresponding Python enum members (by name or value)
         all_db_matched = True
         for db_val in db_values_upper:
             if db_val not in python_names and db_val not in python_values:
                 all_db_matched = False
                 break
-        
+
         if matches_names or (matches_values and all_db_matched):
             # Show what matched
             if matches_names:
@@ -205,7 +206,7 @@ def verify_enum_consistency(conn) -> bool:
             else:
                 match_type = "values"
                 matched = sorted(matches_values)
-            
+
             print_colored(
                 f"   ✅ {python_enum_class.__name__} enum synced (matched by {match_type})",
                 Colors.GREEN
@@ -228,7 +229,7 @@ def verify_enum_consistency(conn) -> bool:
                 f"      Python enum values: {[str(m.value) for m in python_enum_class]}",
                 Colors.YELLOW
             )
-            
+
             # Show what's missing
             missing_in_python = db_values_upper - python_names - python_values
             if missing_in_python:
@@ -236,19 +237,19 @@ def verify_enum_consistency(conn) -> bool:
                     f"      Missing in Python: {sorted(missing_in_python)}",
                     Colors.RED
                 )
-            
+
             missing_in_db = (python_names | python_values) - db_values_upper
             if missing_in_db:
                 print_colored(
                     f"      Missing in DB: {sorted(missing_in_db)}",
                     Colors.RED
                 )
-            
+
             print_colored(
                 "      ⚠️  Run migrations to sync enums",
                 Colors.YELLOW
             )
-    
+
     print()
     return all_consistent
 
@@ -281,7 +282,7 @@ def reset_dev_data(verify_only: bool = False) -> None:
     max_retries = 3
     retry_delay = 2
     engine = None
-    
+
     for attempt in range(1, max_retries + 1):
         try:
             engine = create_engine(database_url, pool_pre_ping=True)
@@ -303,11 +304,11 @@ def reset_dev_data(verify_only: bool = False) -> None:
                 print_colored(f"❌ Failed to connect to database after {max_retries} attempts", Colors.RED)
                 print_colored(f"   Error: {e}", Colors.RED)
                 sys.exit(1)
-    
+
     with closing(engine.connect()) as conn:
         # Verify enum consistency
         enum_consistent = verify_enum_consistency(conn)
-        
+
         if not enum_consistent:
             print_colored(
                 "⚠️  Enum mismatches detected. Some operations may fail.",
@@ -318,14 +319,14 @@ def reset_dev_data(verify_only: bool = False) -> None:
                 Colors.YELLOW
             )
             print()
-        
+
         if verify_only:
             print_colored("✅ Enum verification complete (verify-only mode)", Colors.GREEN)
             return
-        
+
         # Get enum values dynamically
         print_colored("🔍 Resolving enum values from models...", Colors.BLUE)
-        
+
         # For OrganizationStatus: DB uses uppercase member names (ACTIVE), not lowercase values (active)
         # Check database first to see what it actually has
         org_status_active = None
@@ -341,7 +342,7 @@ def reset_dev_data(verify_only: bool = False) -> None:
         else:
             # Enum doesn't exist yet - use member name (uppercase ACTIVE)
             org_status_active = OrganizationStatus.ACTIVE.name
-        
+
         # For DataRegion: Check what DB has
         data_region_ksa = get_enum_value(DataRegion, "KSA", prefer_name=True)
         if not data_region_ksa:
@@ -350,7 +351,7 @@ def reset_dev_data(verify_only: bool = False) -> None:
                 data_region_ksa = "KSA"
             else:
                 data_region_ksa = DataRegion.KSA.name  # Fallback to member name
-        
+
         # For UserRole: DB likely uses member names (ADMIN)
         user_role_admin = get_enum_value(UserRole, "ADMIN", prefer_name=True)
         if not user_role_admin:
@@ -359,15 +360,15 @@ def reset_dev_data(verify_only: bool = False) -> None:
                 user_role_admin = "ADMIN"
             else:
                 user_role_admin = UserRole.ADMIN.name  # Fallback to member name
-        
+
         print_colored(f"   ✅ OrganizationStatus.ACTIVE = '{org_status_active}'", Colors.GREEN)
         print_colored(f"   ✅ DataRegion.KSA = '{data_region_ksa}'", Colors.GREEN)
         print_colored(f"   ✅ UserRole.ADMIN = '{user_role_admin}'", Colors.GREEN)
         print()
-        
+
         org_id = None
         org_name = None
-        
+
         # Operation 1: Find or create the default organization (idempotent)
         try:
             print_colored("📊 Checking for default organization...", Colors.BLUE)
@@ -380,7 +381,7 @@ def reset_dev_data(verify_only: bool = False) -> None:
                 """)
             )
             existing_org = result.fetchone()
-            
+
             if existing_org:
                 org_id, org_name = existing_org
                 print_colored(f"✅ Found existing organization: {org_name} (ID: {org_id})", Colors.GREEN)
@@ -422,7 +423,7 @@ def reset_dev_data(verify_only: bool = False) -> None:
             else:
                 print_colored(f"❌ Error with organization: {e}", Colors.RED)
             sys.exit(1)
-        
+
         # Operation 2: Reassign API keys to default org
         try:
             print_colored("🔑 Reassigning API keys...", Colors.BLUE)
@@ -443,7 +444,7 @@ def reset_dev_data(verify_only: bool = False) -> None:
         except Exception as e:
             conn.rollback()
             print_colored(f"⚠️  Warning: Could not reassign API keys: {e}", Colors.YELLOW)
-        
+
         # Operation 3: Reassign users to default org
         try:
             print_colored("👥 Reassigning users...", Colors.BLUE)
@@ -464,7 +465,7 @@ def reset_dev_data(verify_only: bool = False) -> None:
         except Exception as e:
             conn.rollback()
             print_colored(f"⚠️  Warning: Could not reassign users: {e}", Colors.YELLOW)
-        
+
         # Operation 4: Delete other organizations (after reassignments are committed)
         try:
             print_colored("🗑️  Cleaning up other organizations...", Colors.BLUE)
@@ -481,7 +482,7 @@ def reset_dev_data(verify_only: bool = False) -> None:
         except Exception as e:
             conn.rollback()
             print_colored(f"⚠️  Warning: Could not delete organizations: {e}", Colors.YELLOW)
-        
+
         # Operation 5: Clear tenant data tables
         # Correct cleanup order to avoid FK issues
         tables_to_clear = [
@@ -495,7 +496,7 @@ def reset_dev_data(verify_only: bool = False) -> None:
             ("webhook_endpoints", "webhooks"),
             ("users", "users"),  # safe to delete last
         ]
-        
+
         cleared_groups = set()
         for table_name, group_name in tables_to_clear:
             try:
@@ -510,11 +511,11 @@ def reset_dev_data(verify_only: bool = False) -> None:
                     f"⚠️  Warning: Could not clear {table_name}: {e}",
                     Colors.YELLOW
                 )
-        
+
         if cleared_groups:
             groups_str = ", ".join(sorted(cleared_groups))
             print_colored(f"🧹 Cleared {groups_str}", Colors.GREEN)
-        
+
         # Operation 6: Reset all sequences using DO block
         try:
             print_colored("🔁 Resetting ID sequences...", Colors.BLUE)
@@ -539,7 +540,7 @@ def reset_dev_data(verify_only: bool = False) -> None:
         except Exception as e:
             conn.rollback()
             print_colored(f"⚠️  Warning: Could not reset sequences: {e}", Colors.YELLOW)
-        
+
         # Operation 7: Seed default admin user (idempotent)
         if env == "development":
             try:
@@ -558,7 +559,7 @@ def reset_dev_data(verify_only: bool = False) -> None:
                     }
                 )
                 existing_user = result.fetchone()
-                
+
                 if existing_user:
                     print_colored(
                         "   ✅ Admin user already exists: admin@example.com",
@@ -603,12 +604,12 @@ def reset_dev_data(verify_only: bool = False) -> None:
                         f"⚠️  Warning: Could not seed admin user: {e}",
                         Colors.YELLOW
                     )
-        
+
         # Get final counts for summary
         org_count = 0
         user_count = 0
         api_key_count = 0
-        
+
         try:
             result = conn.execute(text("SELECT COUNT(*) FROM organizations"))
             org_count = result.scalar()
@@ -617,7 +618,7 @@ def reset_dev_data(verify_only: bool = False) -> None:
                 f"⚠️  Warning: Could not count organizations: {e}",
                 Colors.YELLOW
             )
-        
+
         try:
             result = conn.execute(text("SELECT COUNT(*) FROM users"))
             user_count = result.scalar()
@@ -626,7 +627,7 @@ def reset_dev_data(verify_only: bool = False) -> None:
                 f"⚠️  Warning: Could not count users: {e}",
                 Colors.YELLOW
             )
-        
+
         try:
             result = conn.execute(
                 text("SELECT COUNT(*) FROM api_keys WHERE organization_id = :org_id"),
@@ -638,19 +639,19 @@ def reset_dev_data(verify_only: bool = False) -> None:
                 f"⚠️  Warning: Could not count API keys: {e}",
                 Colors.YELLOW
             )
-        
+
         # Print summary
         print()
         print_colored("=" * 70, Colors.GREEN + Colors.BOLD)
         print_colored("🎉 Dev seed complete!", Colors.GREEN + Colors.BOLD)
         print_colored("=" * 70, Colors.GREEN + Colors.BOLD)
         print()
-        
+
         if enum_consistent:
             print_colored("✅ Enums synced with database", Colors.GREEN)
         else:
             print_colored("⚠️  Enum mismatches detected (see warnings above)", Colors.YELLOW)
-        
+
         print_colored("✅ Default org + admin user verified", Colors.GREEN)
         print_colored("📊 Final data summary:", Colors.CYAN)
         print_colored(f"  • Organizations: {org_count}", Colors.CYAN)
@@ -670,7 +671,7 @@ if __name__ == "__main__":
         help="Only verify enum consistency, skip data seeding"
     )
     args = parser.parse_args()
-    
+
     try:
         reset_dev_data(verify_only=args.verify_only)
     except KeyboardInterrupt:

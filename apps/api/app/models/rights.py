@@ -1,7 +1,9 @@
 """Data rights request model."""
 import enum
-from datetime import datetime
-from sqlalchemy import Column, String, Integer, DateTime, Enum as SQLEnum, ForeignKey, Text
+
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Enum as SQLEnum
+
 from apps.api.app.db.base import BaseModel
 
 

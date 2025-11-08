@@ -1,20 +1,18 @@
 """Authentication dependencies."""
-import secrets
-from typing import Optional
-from datetime import datetime
+from datetime import UTC, datetime
 
-from fastapi import Header, Request, Depends
+from fastapi import Depends, Header, Request
 from sqlalchemy.orm import Session
 
 from apps.api.app.core.config import settings
-from apps.api.app.core.security import verify_api_key, verify_hmac_signature, decrypt_field
-from apps.api.app.core.errors import UnauthorizedError, ForbiddenError
+from apps.api.app.core.errors import ForbiddenError, UnauthorizedError
+from apps.api.app.core.security import decrypt_field, verify_api_key, verify_hmac_signature
 from apps.api.app.db.session import get_db
 from apps.api.app.models.api_key import ApiKey
 from apps.api.app.models.organization import Organization, OrganizationStatus
 
 
-def get_api_key_from_header(x_api_key: Optional[str] = Header(None, alias="X-Api-Key")) -> str:
+def get_api_key_from_header(x_api_key: str | None = Header(None, alias="X-Api-Key")) -> str:
     """Extract API key from header."""
     if not x_api_key:
         raise UnauthorizedError("Missing X-Api-Key header")
@@ -24,8 +22,8 @@ def get_api_key_from_header(x_api_key: Optional[str] = Header(None, alias="X-Api
 async def verify_api_key_auth(
     request: Request,
     api_key: str = Header(None, alias="X-Api-Key"),
-    x_signature: Optional[str] = Header(None, alias="X-Signature"),
-    x_timestamp: Optional[str] = Header(None, alias="X-Timestamp"),
+    x_signature: str | None = Header(None, alias="X-Signature"),
+    x_timestamp: str | None = Header(None, alias="X-Timestamp"),
     db: Session = Depends(get_db),
 ) -> tuple[ApiKey, Organization]:
     """
@@ -52,7 +50,7 @@ async def verify_api_key_auth(
         raise UnauthorizedError("Invalid API key")
 
     # Update last used timestamp
-    matched_key.last_used_at = datetime.utcnow()
+    matched_key.last_used_at = datetime.now(UTC)
     db.commit()
 
     # Get organization
@@ -94,7 +92,7 @@ def require_role(required_role: str):
 # Note: This will be available after the auth router module is loaded
 try:
     from apps.api.app.routers.auth import get_current_user_from_token
-    
+
     # Alias for convenience (matches user's request)
     # This is the same function, just with a shorter name for convenience
     get_current_user = get_current_user_from_token
@@ -119,4 +117,3 @@ except ImportError:
             "Auth router not available. "
             "Import get_current_user_from_token directly from apps.api.app.routers.auth"
         )
-

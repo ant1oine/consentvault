@@ -1,10 +1,7 @@
 """Tenant scoping dependencies."""
-from typing import Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import Column
 
 from apps.api.app.core.errors import NotFoundError
-from apps.api.app.models.organization import Organization
 
 
 def ensure_tenant_access(

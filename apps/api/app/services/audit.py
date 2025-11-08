@@ -1,13 +1,12 @@
 """Audit service."""
-from typing import Optional
 from datetime import datetime
 
+from sqlalchemy import desc
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, desc
 
 from apps.api.app.models.audit import AuditLog
-from apps.api.app.utils.ids import generate_ulid
 from apps.api.app.utils.hashing import compute_audit_hash
+from apps.api.app.utils.ids import generate_ulid
 
 
 class AuditService:
@@ -36,13 +35,13 @@ class AuditService:
     def log_event(
         self,
         organization_id: int,
-        actor_api_key_id: Optional[int],
+        actor_api_key_id: int | None,
         event_type: str,
         object_type: str,
         object_id: str,
         prev_hash: str,
         entry_hash: str,
-        request_fingerprint: Optional[str] = None,
+        request_fingerprint: str | None = None,
     ) -> AuditLog:
         """Log an audit event."""
         audit_log = AuditLog(
@@ -64,9 +63,9 @@ class AuditService:
     def list_events(
         self,
         organization_id: int,
-        event_type: Optional[str] = None,
-        object_type: Optional[str] = None,
-        since: Optional[datetime] = None,
+        event_type: str | None = None,
+        object_type: str | None = None,
+        since: datetime | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[AuditLog]:

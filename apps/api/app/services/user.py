@@ -1,16 +1,15 @@
 """User service."""
-from typing import List, Optional
-from datetime import datetime
-from sqlalchemy.orm import Session
+from datetime import UTC, datetime
+
 from sqlalchemy import and_, desc
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
-from apps.api.app.models.user import User, UserRole
-from apps.api.app.schemas.user import UserCreate, UserUpdateRole
 from apps.api.app.core.errors import NotFoundError, ValidationError
+from apps.api.app.models.user import User
+from apps.api.app.schemas.user import UserCreate, UserUpdateRole
 from apps.api.app.services.audit import AuditService
 from apps.api.app.utils.ids import generate_ulid
-from apps.api.app.utils.hashing import compute_audit_hash
 
 
 class UserService:
@@ -20,7 +19,7 @@ class UserService:
         self.db = db
         self.audit_service = AuditService(db)
 
-    def list_users(self, organization_id: int) -> List[User]:
+    def list_users(self, organization_id: int) -> list[User]:
         """List all users for an organization."""
         return (
             self.db.query(User)
@@ -33,8 +32,8 @@ class UserService:
         self,
         organization_id: int,
         data: UserCreate,
-        actor_api_key_id: Optional[int],
-        request_fingerprint: Optional[str] = None,
+        actor_api_key_id: int | None,
+        request_fingerprint: str | None = None,
     ) -> User:
         """Create a new user."""
         # Normalize email to lowercase
@@ -73,6 +72,7 @@ class UserService:
 
         # Log audit event
         prev_hash = self.audit_service.get_latest_hash(organization_id)
+        event_time = datetime.now(UTC)
         event_data = {
             "event_type": "user.created",
             "object_type": "User",
@@ -81,7 +81,7 @@ class UserService:
             "email": user.email,
             "role": user.role.value,
             "created_by_api_key_id": actor_api_key_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": event_time.isoformat(),
         }
         entry_hash = self.audit_service.compute_hash(prev_hash, event_data)
         self.audit_service.log_event(
@@ -102,8 +102,8 @@ class UserService:
         user_id: str,
         organization_id: int,
         data: UserUpdateRole,
-        actor_api_key_id: Optional[int],
-        request_fingerprint: Optional[str] = None,
+        actor_api_key_id: int | None,
+        request_fingerprint: str | None = None,
     ) -> User:
         """Update user role."""
         user = (
@@ -126,6 +126,7 @@ class UserService:
 
         # Log audit event
         prev_hash = self.audit_service.get_latest_hash(organization_id)
+        event_time = datetime.now(UTC)
         event_data = {
             "event_type": "user.role_changed",
             "object_type": "User",
@@ -134,7 +135,7 @@ class UserService:
             "old_role": old_role,
             "new_role": user.role.value,
             "changed_by_api_key_id": actor_api_key_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": event_time.isoformat(),
         }
         entry_hash = self.audit_service.compute_hash(prev_hash, event_data)
         self.audit_service.log_event(
@@ -155,8 +156,8 @@ class UserService:
         user_id: str,
         organization_id: int,
         active: bool,
-        actor_api_key_id: Optional[int],
-        request_fingerprint: Optional[str] = None,
+        actor_api_key_id: int | None,
+        request_fingerprint: str | None = None,
     ) -> User:
         """Toggle user active status."""
         user = (
@@ -179,6 +180,7 @@ class UserService:
         # Log audit event
         event_type = "user.activated" if active else "user.deactivated"
         prev_hash = self.audit_service.get_latest_hash(organization_id)
+        event_time = datetime.now(UTC)
         event_data = {
             "event_type": event_type,
             "object_type": "User",
@@ -186,7 +188,7 @@ class UserService:
             "organization_id": organization_id,
             "active": active,
             "changed_by_api_key_id": actor_api_key_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": event_time.isoformat(),
         }
         entry_hash = self.audit_service.compute_hash(prev_hash, event_data)
         self.audit_service.log_event(
@@ -201,6 +203,5 @@ class UserService:
         )
 
         return user
-
 
 

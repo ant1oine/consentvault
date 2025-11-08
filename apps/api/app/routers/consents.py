@@ -1,17 +1,21 @@
 """Consent router."""
 from datetime import datetime
-from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Request, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
+from apps.api.app.core.rate_limit import rate_limiter
 from apps.api.app.db.session import get_db
 from apps.api.app.deps.auth import verify_api_key_auth
 from apps.api.app.models.api_key import ApiKey
 from apps.api.app.models.organization import Organization
-from apps.api.app.schemas.consent import ConsentCreate, ConsentResponse, ConsentEventResponse, ConsentWithdraw
+from apps.api.app.schemas.consent import (
+    ConsentCreate,
+    ConsentEventResponse,
+    ConsentResponse,
+    ConsentWithdraw,
+)
 from apps.api.app.services.consent import ConsentService
-from apps.api.app.core.rate_limit import rate_limiter
 
 router = APIRouter(prefix="/v1/consents", tags=["consents"])
 
@@ -84,7 +88,7 @@ async def get_latest_consent(
     return response_dict
 
 
-@router.get("", response_model=List[ConsentResponse])
+@router.get("", response_model=list[ConsentResponse])
 async def list_consents(
     limit: int = Query(100, le=1000),
     offset: int = Query(0, ge=0),
@@ -100,7 +104,7 @@ async def list_consents(
 
     consent_service = ConsentService(db)
     aggregates = consent_service.list_aggregates(org.id, limit=limit, offset=offset)
-    
+
     # Get purpose codes for each aggregate
     from apps.api.app.models.purpose import Purpose
     results = []
@@ -109,13 +113,13 @@ async def list_consents(
         response_dict = aggregate.to_dict()
         response_dict["purpose_code"] = purpose.code if purpose else None
         results.append(response_dict)
-    
+
     return results
 
 
-@router.get("/events", response_model=List[ConsentEventResponse])
+@router.get("/events", response_model=list[ConsentEventResponse])
 async def list_consent_events(
-    since: Optional[datetime] = Query(None),
+    since: datetime | None = Query(None),
     limit: int = Query(100, le=1000),
     offset: int = Query(0, ge=0),
     request: Request = None,
@@ -152,7 +156,7 @@ async def withdraw_consent(
     user_agent = request.headers.get("user-agent")
 
     consent_service = ConsentService(db)
-    from apps.api.app.models.consent import ConsentStatus, ConsentMethod
+    from apps.api.app.models.consent import ConsentMethod, ConsentStatus
 
     aggregate = consent_service.create_or_update_consent(
         organization_id=org.id,

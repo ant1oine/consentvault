@@ -1,5 +1,6 @@
 """System model."""
-from sqlalchemy import Column, String, Integer, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, ForeignKey, Integer, String, UniqueConstraint
+
 from apps.api.app.db.base import BaseModel
 
 

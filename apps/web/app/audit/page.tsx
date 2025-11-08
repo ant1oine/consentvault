@@ -7,6 +7,7 @@ import { getAuditLogs } from '@/lib/api'
 import { Lock } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useEffect, useRef } from 'react'
+import { queryKeys } from '@/lib/queryKeys'
 
 export default function AuditPage() {
   const {
@@ -16,7 +17,7 @@ export default function AuditPage() {
     isFetchingNextPage,
     isLoading,
   } = useInfiniteQuery({
-    queryKey: ['audit-logs'],
+    queryKey: queryKeys.auditLogs(),
     queryFn: ({ pageParam = 0 }) =>
       getAuditLogs({ limit: 50, offset: pageParam }),
     getNextPageParam: (lastPage, allPages) => {
@@ -38,13 +39,14 @@ export default function AuditPage() {
       { threshold: 0.1 }
     )
 
-    if (observerTarget.current) {
-      observer.observe(observerTarget.current)
+    const target = observerTarget.current
+    if (target) {
+      observer.observe(target)
     }
 
     return () => {
-      if (observerTarget.current) {
-        observer.unobserve(observerTarget.current)
+      if (target) {
+        observer.unobserve(target)
       }
     }
   }, [hasNextPage, isFetchingNextPage, fetchNextPage])
@@ -134,4 +136,3 @@ export default function AuditPage() {
     </div>
   )
 }
-

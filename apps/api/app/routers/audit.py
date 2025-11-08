@@ -1,26 +1,25 @@
 """Audit log router (read-only)."""
 from datetime import datetime
-from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Request, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
+from apps.api.app.core.rate_limit import rate_limiter
 from apps.api.app.db.session import get_db
 from apps.api.app.deps.auth import verify_api_key_auth
 from apps.api.app.models.api_key import ApiKey
 from apps.api.app.models.organization import Organization
 from apps.api.app.schemas.audit import AuditLogResponse
 from apps.api.app.services.audit import AuditService
-from apps.api.app.core.rate_limit import rate_limiter
 
 router = APIRouter(prefix="/v1/audit", tags=["audit"])
 
 
-@router.get("", response_model=List[AuditLogResponse])
+@router.get("", response_model=list[AuditLogResponse])
 async def list_audit_logs(
-    event_type: Optional[str] = Query(None),
-    object_type: Optional[str] = Query(None),
-    since: Optional[datetime] = Query(None),
+    event_type: str | None = Query(None),
+    object_type: str | None = Query(None),
+    since: datetime | None = Query(None),
     limit: int = Query(100, le=1000),
     offset: int = Query(0, ge=0),
     request: Request = None,

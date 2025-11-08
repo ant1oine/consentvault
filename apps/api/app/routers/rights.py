@@ -1,21 +1,20 @@
 """Data rights router."""
-from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Request, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
+from apps.api.app.core.rate_limit import rate_limiter
 from apps.api.app.db.session import get_db
 from apps.api.app.deps.auth import verify_api_key_auth
 from apps.api.app.models.api_key import ApiKey
 from apps.api.app.models.organization import Organization
-from apps.api.app.models.rights import RequestStatus, DataRight
+from apps.api.app.models.rights import DataRight, RequestStatus
 from apps.api.app.schemas.rights import (
+    DataRightRequestComplete,
     DataRightRequestCreate,
     DataRightRequestResponse,
-    DataRightRequestComplete,
 )
 from apps.api.app.services.rights import RightsService
-from apps.api.app.core.rate_limit import rate_limiter
 
 router = APIRouter(prefix="/v1/rights", tags=["rights"])
 
@@ -68,10 +67,10 @@ async def complete_rights_request(
     return request_obj
 
 
-@router.get("", response_model=List[DataRightRequestResponse])
+@router.get("", response_model=list[DataRightRequestResponse])
 async def list_rights_requests(
-    status: Optional[RequestStatus] = Query(None),
-    right: Optional[DataRight] = Query(None),
+    status: RequestStatus | None = Query(None),
+    right: DataRight | None = Query(None),
     limit: int = Query(100, le=1000),
     offset: int = Query(0, ge=0),
     request: Request = None,

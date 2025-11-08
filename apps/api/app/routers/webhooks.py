@@ -1,16 +1,15 @@
 """Webhook delivery admin router."""
-from typing import List
 
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
+from apps.api.app.core.rate_limit import rate_limiter
 from apps.api.app.db.session import get_db
 from apps.api.app.deps.auth import verify_api_key_auth
 from apps.api.app.models.api_key import ApiKey
 from apps.api.app.models.organization import Organization
 from apps.api.app.schemas.webhook import WebhookDeliveryResponse
 from apps.api.app.services.webhook import WebhookService
-from apps.api.app.core.rate_limit import rate_limiter
 
 router = APIRouter(prefix="/v1/webhooks", tags=["webhooks"])
 

@@ -1,8 +1,7 @@
 """Field-level encryption utilities."""
 from typing import Any
 
-from apps.api.app.core.security import decrypt_field, encrypt_field, get_fernet
-from apps.api.app.core.config import settings
+from apps.api.app.core.security import decrypt_field, encrypt_field
 
 
 def encrypt_fields(data: dict[str, Any], encryption_key: str) -> dict[str, Any]:

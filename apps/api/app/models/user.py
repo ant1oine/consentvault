@@ -1,7 +1,19 @@
 """User model."""
 import enum
-from sqlalchemy import Column, String, Integer, Boolean, ForeignKey, Enum, DateTime, func, UniqueConstraint
+
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import relationship
+
 from apps.api.app.db.base import Base
 
 

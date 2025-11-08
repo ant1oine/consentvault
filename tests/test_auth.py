@@ -6,7 +6,7 @@ from apps.api.app.models.organization import OrganizationStatus
 from apps.api.app.core.security import hash_api_key
 
 
-def test_create_api_key(client, organization, api_key):
+def test_create_api_key(client, organization, api_key, db):
     """Test API key creation returns plaintext key once."""
     # Use existing key to authenticate
     key, plaintext = api_key
@@ -23,12 +23,9 @@ def test_create_api_key(client, organization, api_key):
     assert data["name"] == "New Key"
 
     # Verify key is hashed in database
-    from apps.api.app.db.session import SessionLocal
-    db = SessionLocal()
     from apps.api.app.models.api_key import ApiKey
     db_key = db.query(ApiKey).filter(ApiKey.id == data["id"]).first()
     assert db_key.hashed_key != data["api_key"]
-    db.close()
 
 
 def test_auth_rejects_unknown_key(client):
@@ -69,12 +66,13 @@ def test_hmac_verification(client, api_key, db):
     import hmac
     import hashlib
     from apps.api.app.core.security import decrypt_field
+    from apps.api.app.core.config import settings
 
     # Get HMAC secret
-    hmac_secret = decrypt_field(key.hmac_secret, "change_me_32bytes_base64")
+    hmac_secret = decrypt_field(key.hmac_secret, settings.master_encryption_key)
 
     # Create request with HMAC
-    body = b'{"name":"Test"}'
+    body = b'{"code":"hmac-test","description":"HMAC test purpose"}'
     timestamp = str(int(time.time()))
     message = body + timestamp.encode()
     signature = hmac.new(hmac_secret.encode(), message, hashlib.sha256).hexdigest()
@@ -91,5 +89,3 @@ def test_hmac_verification(client, api_key, db):
     )
     # Should succeed with valid HMAC
     assert response.status_code in [status.HTTP_201_CREATED, status.HTTP_400_BAD_REQUEST]
-
-

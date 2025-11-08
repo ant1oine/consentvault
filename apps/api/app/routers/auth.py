@@ -1,17 +1,15 @@
 """Authentication router for user login/logout with JWT tokens."""
 from datetime import timedelta
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
-from apps.api.app.core.security import create_access_token, verify_token
 from apps.api.app.core.errors import UnauthorizedError
+from apps.api.app.core.rate_limit import get_redis
+from apps.api.app.core.security import create_access_token, verify_token
 from apps.api.app.db.session import get_db
 from apps.api.app.models.user import User
-from apps.api.app.core.rate_limit import get_redis
-from apps.api.app.core.config import settings
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -40,33 +38,33 @@ def login(
     """
     # Find user by email (form_data.username is the email in OAuth2PasswordRequestForm)
     user = db.query(User).filter(User.email == form_data.username.lower().strip()).first()
-    
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     if not user.active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is inactive",
         )
-    
+
     # TODO: Implement proper password verification
     # For now, accept any password if user exists and is active
     # In production, add password field to User model and verify with pwd_context.verify()
     # if not pwd_context.verify(form_data.password, user.hashed_password):
     #     raise HTTPException(...)
-    
+
     # Create access token
     access_token_expires = timedelta(minutes=30)
     access_token = create_access_token(
         data={"sub": user.id, "email": user.email, "role": user.role.value},
         expires_delta=access_token_expires,
     )
-    
+
     return {
         "access_token": access_token,
         "token_type": "bearer",
@@ -89,7 +87,7 @@ def logout(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No active session",
         )
-    
+
     # Verify token is valid before blacklisting
     try:
         payload = verify_token(token)
@@ -98,16 +96,16 @@ def logout(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token",
         )
-    
+
     # Blacklist token in Redis (expires in 1 hour or token expiration, whichever is longer)
     # Get token expiration from payload
     exp = payload.get("exp", 0)
     current_time = int(__import__("time").time())
     ttl = max(3600, exp - current_time)  # At least 1 hour, or until token expires
-    
+
     r = get_redis_blacklist()
     r.setex(f"blacklist:{token}", ttl, "revoked")
-    
+
     return {"message": "Logged out successfully"}
 
 
@@ -136,28 +134,28 @@ def get_current_user_from_token(
         payload = verify_token(token)
     except Exception as e:
         raise UnauthorizedError(f"Invalid token: {str(e)}")
-    
+
     # Check if token is blacklisted
     r = get_redis_blacklist()
     if r.exists(f"blacklist:{token}"):
         raise UnauthorizedError("Token has been revoked")
-    
+
     # Extract user ID from token
-    user_id: Optional[str] = payload.get("sub")
+    user_id: str | None = payload.get("sub")
     if user_id is None:
         raise UnauthorizedError("Token missing user ID")
-    
+
     # Load user from database
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise UnauthorizedError("User not found")
-    
+
     if not user.active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is inactive",
         )
-    
+
     return user
 
 

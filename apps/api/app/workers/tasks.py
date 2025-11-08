@@ -1,15 +1,12 @@
 """RQ worker tasks."""
-import time
-from datetime import datetime
-from typing import Optional
+from datetime import UTC, datetime
 
 import httpx
-from sqlalchemy.orm import Session
 
-from apps.api.app.db.session import SessionLocal
-from apps.api.app.models.webhook import WebhookDelivery, WebhookEndpoint, DeliveryStatus
-from apps.api.app.core.security import decrypt_field, generate_hmac_signature
 from apps.api.app.core.config import settings
+from apps.api.app.core.security import decrypt_field
+from apps.api.app.db.session import SessionLocal
+from apps.api.app.models.webhook import DeliveryStatus, WebhookDelivery, WebhookEndpoint
 from apps.api.app.utils.hmac_sign import sign_webhook_payload
 
 
@@ -53,7 +50,7 @@ def deliver_webhook(delivery_id: str) -> None:
                 timeout=10.0,
             )
             delivery.attempt_count += 1
-            delivery.last_attempt_at = datetime.utcnow()
+            delivery.last_attempt_at = datetime.now(UTC)
             delivery.response_code = response.status_code
 
             if 200 <= response.status_code < 300:
@@ -63,7 +60,7 @@ def deliver_webhook(delivery_id: str) -> None:
                 delivery.error_message = f"HTTP {response.status_code}"
         except Exception as e:
             delivery.attempt_count += 1
-            delivery.last_attempt_at = datetime.utcnow()
+            delivery.last_attempt_at = datetime.now(UTC)
             delivery.status = DeliveryStatus.FAILED
             delivery.error_message = str(e)[:1000]
 
@@ -78,5 +75,3 @@ def deliver_webhook(delivery_id: str) -> None:
 
     finally:
         db.close()
-
-

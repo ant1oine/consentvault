@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getConsents } from '@/lib/api'
+import { queryKeys } from '@/lib/queryKeys'
 import { Lock, HelpCircle } from 'lucide-react'
 import {
   Tooltip,
@@ -23,7 +24,7 @@ import { motion } from 'framer-motion'
 
 export default function ConsentsPage() {
   const { data: consents, isLoading } = useQuery({
-    queryKey: ['consents'],
+    queryKey: queryKeys.consents({ limit: 100 }),
     queryFn: () => getConsents({ limit: 100 }),
   })
 
@@ -125,4 +126,3 @@ export default function ConsentsPage() {
     </div>
   )
 }
-

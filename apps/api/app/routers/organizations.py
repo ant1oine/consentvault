@@ -1,31 +1,28 @@
 """Organizations router for admin management."""
 import secrets
-from typing import List
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Request
-from fastapi_limiter.depends import RateLimiter
 from sqlalchemy.orm import Session
 
+from apps.api.app.core.config import settings
+from apps.api.app.core.ratelimit import optional_rate_limit
+from apps.api.app.core.security import encrypt_field, hash_api_key
 from apps.api.app.db.session import get_db
 from apps.api.app.deps.auth import verify_api_key_auth
 from apps.api.app.models.api_key import ApiKey, ApiKeyRole
-from apps.api.app.models.organization import Organization, OrganizationStatus, DataRegion
+from apps.api.app.models.organization import DataRegion, Organization, OrganizationStatus
 from apps.api.app.schemas.organization import (
     OrganizationCreate,
-    OrganizationResponse,
     OrganizationCreateResponse,
+    OrganizationResponse,
 )
-from apps.api.app.core.security import hash_api_key, encrypt_field
-from apps.api.app.core.config import settings
 from apps.api.app.services.audit import AuditService
-from apps.api.app.utils.ids import generate_ulid
-from apps.api.app.utils.hashing import compute_audit_hash
 
 router = APIRouter(
     prefix="/v1/admin/organizations",
     tags=["admin"],
-    dependencies=[Depends(RateLimiter(times=60, seconds=60))],
+    dependencies=[optional_rate_limit(times=60, seconds=60)],
 )
 
 
@@ -75,7 +72,7 @@ def create_organization_with_key(
     return org, plaintext_key, hmac_secret
 
 
-@router.get("", response_model=List[OrganizationResponse])
+@router.get("", response_model=list[OrganizationResponse])
 async def list_organizations(
     db: Session = Depends(get_db),
     auth: tuple[ApiKey, Organization] = Depends(verify_api_key_auth),
@@ -88,7 +85,7 @@ async def list_organizations(
     organizations = db.query(Organization).filter(
         Organization.status != OrganizationStatus.DELETED
     ).all()
-    
+
     return [
         OrganizationResponse(
             id=org.id,
@@ -123,7 +120,8 @@ async def create_organization(
     # Log audit event
     audit_service = AuditService(db)
     prev_hash = audit_service.get_latest_hash(org.id)
-    
+
+    event_time = datetime.now(UTC)
     event_data = {
         "event_type": "organization.created",
         "object_type": "organization",
@@ -132,15 +130,15 @@ async def create_organization(
         "name": org.name,
         "data_region": org.data_region.value,
         "created_by_api_key_id": api_key.id,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": event_time.isoformat(),
     }
     entry_hash = audit_service.compute_hash(prev_hash, event_data)
-    
+
     # Get request fingerprint (simplified)
     request_fingerprint = None
     if request.client:
         request_fingerprint = f"{request.client.host}:{request.headers.get('user-agent', '')}"
-    
+
     audit_service.log_event(
         organization_id=org.id,
         actor_api_key_id=api_key.id,
@@ -163,4 +161,3 @@ async def create_organization(
         api_key=plaintext_api_key,
         hmac_secret=plaintext_hmac_secret,
     )
-

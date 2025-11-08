@@ -27,6 +27,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useState } from 'react'
+import { queryKeys } from '@/lib/queryKeys'
 
 export default function RightsPage() {
   const [completeDialogOpen, setCompleteDialogOpen] = useState(false)
@@ -35,7 +36,7 @@ export default function RightsPage() {
   const queryClient = useQueryClient()
 
   const { data: rights, isLoading } = useQuery({
-    queryKey: ['rights'],
+    queryKey: queryKeys.rights(),
     queryFn: () => getRights(),
   })
 
@@ -43,7 +44,7 @@ export default function RightsPage() {
     mutationFn: (data: { request_id: string; evidence_ref: string }) =>
       completeRight(data.request_id, { evidence_ref: data.evidence_ref }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rights'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.rights() })
       toast.success('Rights request marked as complete')
       setCompleteDialogOpen(false)
       setEvidenceRef('')
@@ -205,4 +206,3 @@ export default function RightsPage() {
     </div>
   )
 }
-

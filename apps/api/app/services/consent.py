@@ -1,21 +1,19 @@
 """Consent service."""
-from datetime import datetime
-from typing import Optional
+from datetime import UTC, datetime
 
-from sqlalchemy.orm import Session
 from sqlalchemy import and_
+from sqlalchemy.orm import Session
 
-from apps.api.app.core.security import hash_with_salt
 from apps.api.app.core.config import settings
-from apps.api.app.utils.crypto import encrypt_fields
-from apps.api.app.models.consent import ConsentAggregate, ConsentEvent, ConsentStatus, ConsentMethod
+from apps.api.app.core.security import hash_with_salt
+from apps.api.app.models.consent import ConsentAggregate, ConsentEvent, ConsentMethod, ConsentStatus
 from apps.api.app.models.purpose import Purpose
 from apps.api.app.models.system import System
-from apps.api.app.models.api_key import ApiKey
-from apps.api.app.utils.ids import generate_ulid
-from apps.api.app.utils.hashing import compute_audit_hash
 from apps.api.app.services.audit import AuditService
 from apps.api.app.services.webhook import WebhookService
+from apps.api.app.utils.crypto import encrypt_fields
+from apps.api.app.utils.hashing import compute_audit_hash
+from apps.api.app.utils.ids import generate_ulid
 
 
 class ConsentService:
@@ -33,13 +31,13 @@ class ConsentService:
         purpose_code: str,
         status: ConsentStatus,
         method: ConsentMethod,
-        source: Optional[str] = None,
-        system_code: Optional[str] = None,
-        evidence_ref: Optional[str] = None,
-        encrypted_fields: Optional[dict] = None,
+        source: str | None = None,
+        system_code: str | None = None,
+        evidence_ref: str | None = None,
+        encrypted_fields: dict | None = None,
         api_key_id: int = None,
-        ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
     ) -> ConsentAggregate:
         """Create or update consent aggregate and append event."""
         # Get purpose
@@ -105,7 +103,7 @@ class ConsentService:
             .first()
         )
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         if aggregate:
             aggregate.status = status
             aggregate.last_event_at = now
@@ -196,7 +194,7 @@ class ConsentService:
 
     def get_latest_consent(
         self, organization_id: int, external_user_id: str, purpose_code: str
-    ) -> Optional[ConsentAggregate]:
+    ) -> ConsentAggregate | None:
         """Get latest consent for user and purpose."""
         purpose = (
             self.db.query(Purpose)
@@ -239,7 +237,7 @@ class ConsentService:
     def list_events(
         self,
         organization_id: int,
-        since: Optional[datetime] = None,
+        since: datetime | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[ConsentEvent]:
@@ -256,4 +254,3 @@ class ConsentService:
         # In production, this would fetch from a secure store
         # For now, use master key + org_id as salt
         return f"{settings.master_encryption_key}:{organization_id}"
-

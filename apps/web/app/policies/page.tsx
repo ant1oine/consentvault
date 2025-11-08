@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getPolicies, createPolicy, getPurposes } from '@/lib/api'
+import type { PolicyResponse } from '@/lib/api'
 import { Settings, Edit2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
@@ -27,6 +28,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useState } from 'react'
+import { queryKeys } from '@/lib/queryKeys'
 
 export default function PoliciesPage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false)
@@ -36,12 +38,12 @@ export default function PoliciesPage() {
   const queryClient = useQueryClient()
 
   const { data: policies, isLoading } = useQuery({
-    queryKey: ['policies'],
+    queryKey: queryKeys.policies(),
     queryFn: () => getPolicies(),
   })
 
   const { data: purposes } = useQuery({
-    queryKey: ['purposes'],
+    queryKey: queryKeys.purposes(),
     queryFn: () => getPurposes(),
   })
 
@@ -52,7 +54,7 @@ export default function PoliciesPage() {
       active?: boolean
     }) => createPolicy(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['policies'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.policies() })
       toast.success('Policy updated successfully')
       setEditDialogOpen(false)
       setSelectedPolicy(null)
@@ -64,7 +66,7 @@ export default function PoliciesPage() {
     },
   })
 
-  const handleEditClick = (policy: typeof policies[0]) => {
+  const handleEditClick = (policy: PolicyResponse) => {
     setSelectedPolicy(policy.id)
     setRetentionDays(policy.retention_days.toString())
     setPurposeId(policy.purpose_id.toString())
@@ -233,4 +235,3 @@ export default function PoliciesPage() {
     </div>
   )
 }
-

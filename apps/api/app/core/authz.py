@@ -1,14 +1,15 @@
 """Authorization dependencies."""
-from typing import Literal, Optional
+from typing import Literal
+
 from fastapi import Depends, Header
 
+from apps.api.app.core.errors import ForbiddenError
 from apps.api.app.deps.auth import verify_api_key_auth
 from apps.api.app.models.api_key import ApiKey, ApiKeyRole
-from apps.api.app.core.errors import ForbiddenError
 
 
 def get_organization_id(
-    x_organization_id: Optional[str] = Header(None, alias="X-Organization-ID"),
+    x_organization_id: str | None = Header(None, alias="X-Organization-ID"),
     auth: tuple[ApiKey, any] = Depends(verify_api_key_auth),
 ) -> int:
     """

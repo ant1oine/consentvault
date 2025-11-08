@@ -1,17 +1,20 @@
 """Consent models."""
 import enum
-from datetime import datetime
+
 from sqlalchemy import (
-    Column,
-    String,
-    Integer,
-    DateTime,
-    Enum as SQLEnum,
-    ForeignKey,
     JSON,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
     UniqueConstraint,
 )
+from sqlalchemy import (
+    Enum as SQLEnum,
+)
 from sqlalchemy.orm import relationship
+
 from apps.api.app.db.base import BaseModel
 
 

@@ -27,6 +27,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useState } from 'react'
+import { queryKeys } from '@/lib/queryKeys'
 
 const DATA_REGIONS = ['KSA', 'UAE', 'Qatar', 'Bahrain', 'Oman', 'Kuwait']
 
@@ -40,7 +41,7 @@ export default function OrganizationsPage() {
   const queryClient = useQueryClient()
 
   const { data: organizations, isLoading } = useQuery({
-    queryKey: ['organizations'],
+    queryKey: queryKeys.organizations(),
     queryFn: () => getOrganizations(),
   })
 
@@ -48,7 +49,7 @@ export default function OrganizationsPage() {
     mutationFn: (data: { name: string; data_region: string }) =>
       createOrganization(data),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['organizations'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.organizations() })
       toast.success('Organization created successfully')
       setAddDialogOpen(false)
       setName('')
@@ -273,7 +274,7 @@ export default function OrganizationsPage() {
           </div>
           <DialogFooter>
             <Button onClick={() => setSuccessDialogOpen(false)}>
-              I've Saved These Credentials
+              I&apos;ve Saved These Credentials
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -281,4 +282,3 @@ export default function OrganizationsPage() {
     </div>
   )
 }
-

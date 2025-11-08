@@ -1,5 +1,6 @@
 """Policy model."""
-from sqlalchemy import Column, Integer, Boolean, ForeignKey, UniqueConstraint
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, UniqueConstraint
+
 from apps.api.app.db.base import BaseModel
 
 

@@ -1,11 +1,10 @@
 """Security utilities for hashing, encryption, and HMAC."""
-import base64
 import hashlib
 import hmac
 import os
 import time
-from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from cryptography.fernet import Fernet
 from jose import JWTError, jwt
@@ -93,7 +92,7 @@ JWT_ALGORITHM = "HS256"
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 
-def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
     """
     Create a JWT access token.
     
@@ -105,17 +104,18 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
         Encoded JWT token string
     """
     to_encode = data.copy()
+    now = datetime.now(UTC)
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = now + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
-    
-    to_encode.update({"exp": expire, "iat": datetime.utcnow()})
+        expire = now + timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+
+    to_encode.update({"exp": expire, "iat": now})
     encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
     return encoded_jwt
 
 
-def verify_token(token: str) -> Dict[str, Any]:
+def verify_token(token: str) -> dict[str, Any]:
     """
     Verify and decode a JWT token.
     
@@ -133,4 +133,3 @@ def verify_token(token: str) -> Dict[str, Any]:
         return payload
     except JWTError:
         raise
-

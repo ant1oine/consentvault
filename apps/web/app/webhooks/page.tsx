@@ -27,6 +27,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useState } from 'react'
+import { queryKeys } from '@/lib/queryKeys'
 
 export default function WebhooksPage() {
   const [addDialogOpen, setAddDialogOpen] = useState(false)
@@ -35,7 +36,7 @@ export default function WebhooksPage() {
   const queryClient = useQueryClient()
 
   const { data: webhooks, isLoading } = useQuery({
-    queryKey: ['webhooks'],
+    queryKey: queryKeys.webhooks(),
     queryFn: () => getWebhooks(),
   })
 
@@ -43,7 +44,7 @@ export default function WebhooksPage() {
     mutationFn: (data: { url: string; secret: string }) =>
       createWebhook(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['webhooks'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.webhooks() })
       toast.success('Webhook created successfully')
       setAddDialogOpen(false)
       setUrl('')
@@ -57,7 +58,7 @@ export default function WebhooksPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: number) => deleteWebhook(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['webhooks'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.webhooks() })
       toast.success('Webhook deleted successfully')
     },
     onError: (error: Error) => {
@@ -225,4 +226,3 @@ export default function WebhooksPage() {
     </div>
   )
 }
-

@@ -27,6 +27,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useState } from 'react'
+import { queryKeys } from '@/lib/queryKeys'
 import { Textarea } from '@/components/ui/textarea'
 
 export default function PurposesPage() {
@@ -36,7 +37,7 @@ export default function PurposesPage() {
   const queryClient = useQueryClient()
 
   const { data: purposes, isLoading } = useQuery({
-    queryKey: ['purposes'],
+    queryKey: queryKeys.purposes(),
     queryFn: () => getPurposes(),
   })
 
@@ -44,7 +45,7 @@ export default function PurposesPage() {
     mutationFn: (data: { code: string; description?: string | null }) =>
       createPurpose(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['purposes'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.purposes() })
       toast.success('Purpose created successfully')
       setAddDialogOpen(false)
       setCode('')
@@ -203,4 +204,3 @@ export default function PurposesPage() {
     </div>
   )
 }
-

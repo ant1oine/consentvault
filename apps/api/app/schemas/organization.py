@@ -1,5 +1,6 @@
 """Organization schemas."""
 from pydantic import BaseModel, Field
+
 from apps.api.app.models.organization import DataRegion
 
 

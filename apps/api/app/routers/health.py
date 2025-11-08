@@ -1,10 +1,10 @@
 """Health check router."""
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
-from apps.api.app.db.session import get_db
 from apps.api.app.core.rate_limit import get_redis
+from apps.api.app.db.session import get_db
 
 router = APIRouter()
 

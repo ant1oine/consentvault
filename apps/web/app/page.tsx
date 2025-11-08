@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getConsents, getRights, getPurposes } from '@/lib/api'
+import { queryKeys } from '@/lib/queryKeys'
 import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { FileCheck, XCircle, Shield, Target } from 'lucide-react'
@@ -23,17 +24,17 @@ function AnimatedCounter({ value }: { value: number }) {
 
 export default function DashboardPage() {
   const { data: consents, isLoading: consentsLoading } = useQuery({
-    queryKey: ['consents'],
+    queryKey: queryKeys.consents({ limit: 1000 }),
     queryFn: () => getConsents({ limit: 1000 }),
   })
 
   const { data: rights, isLoading: rightsLoading } = useQuery({
-    queryKey: ['rights'],
+    queryKey: queryKeys.rights(),
     queryFn: () => getRights(),
   })
 
   const { data: purposes, isLoading: purposesLoading } = useQuery({
-    queryKey: ['purposes'],
+    queryKey: queryKeys.purposes(),
     queryFn: () => getPurposes(),
   })
 
@@ -122,4 +123,3 @@ export default function DashboardPage() {
     </div>
   )
 }
-

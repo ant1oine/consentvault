@@ -1,7 +1,9 @@
 """Webhook schemas."""
-from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Any
+
+from pydantic import BaseModel, Field
+
 from apps.api.app.models.webhook import DeliveryStatus
 
 

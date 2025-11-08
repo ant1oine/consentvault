@@ -1,13 +1,14 @@
 """User schemas."""
+from typing import Literal
+
 from pydantic import BaseModel, EmailStr
-from typing import Optional, Literal
 
 
 class UserBase(BaseModel):
     """Base user schema."""
 
     email: EmailStr
-    display_name: Optional[str] = None
+    display_name: str | None = None
     role: Literal["ADMIN", "AUDITOR", "VIEWER"]
     active: bool = True
 

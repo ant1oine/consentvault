@@ -1,6 +1,6 @@
 """Database session management."""
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from apps.api.app.core.config import settings
 

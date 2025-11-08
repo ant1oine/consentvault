@@ -1,6 +1,8 @@
 """Data rights schemas."""
-from pydantic import BaseModel, Field
 from datetime import datetime
+
+from pydantic import BaseModel, Field
+
 from apps.api.app.models.rights import DataRight, RequestStatus
 
 

@@ -1,14 +1,13 @@
 """Data rights service."""
-from datetime import datetime
-from typing import Optional
+from datetime import UTC, datetime
 
-from sqlalchemy.orm import Session
 from sqlalchemy import and_
+from sqlalchemy.orm import Session
 
-from apps.api.app.models.rights import DataRightRequest, DataRight, RequestStatus
-from apps.api.app.utils.ids import generate_ulid
+from apps.api.app.models.rights import DataRight, DataRightRequest, RequestStatus
 from apps.api.app.services.audit import AuditService
 from apps.api.app.services.webhook import WebhookService
+from apps.api.app.utils.ids import generate_ulid
 
 
 class RightsService:
@@ -24,12 +23,12 @@ class RightsService:
         organization_id: int,
         external_user_id: str,
         right: DataRight,
-        reason: Optional[str] = None,
+        reason: str | None = None,
         api_key_id: int = None,
     ) -> DataRightRequest:
         """Create a new data rights request."""
         request_id = generate_ulid()
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         request = DataRightRequest(
             id=request_id,
@@ -104,7 +103,8 @@ class RightsService:
             raise ValueError("Request not found")
 
         request.status = RequestStatus.COMPLETED
-        request.closed_at = datetime.utcnow()
+        now = datetime.now(UTC)
+        request.closed_at = now
         request.evidence_ref = evidence_ref
 
         # Write audit log
@@ -114,7 +114,7 @@ class RightsService:
             "organization_id": organization_id,
             "status": RequestStatus.COMPLETED.value,
             "evidence_ref": evidence_ref,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": now.isoformat(),
         }
         entry_hash = self.audit_service.compute_hash(prev_hash, event_data)
         self.audit_service.log_event(
@@ -140,7 +140,7 @@ class RightsService:
                 "external_user_id": request.external_user_id,
                 "right": request.right.value,
                 "evidence_ref": evidence_ref,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": now.isoformat(),
             },
         )
 
@@ -149,8 +149,8 @@ class RightsService:
     def list_requests(
         self,
         organization_id: int,
-        status: Optional[RequestStatus] = None,
-        right: Optional[DataRight] = None,
+        status: RequestStatus | None = None,
+        right: DataRight | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[DataRightRequest]:
@@ -163,5 +163,4 @@ class RightsService:
         if right:
             query = query.filter(DataRightRequest.right == right)
         return query.order_by(DataRightRequest.opened_at.desc()).limit(limit).offset(offset).all()
-
 

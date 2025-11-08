@@ -1,17 +1,14 @@
 """Webhook service."""
-import json
-from datetime import datetime
-from typing import Optional
 
-from sqlalchemy.orm import Session
-from sqlalchemy import and_
-
-from apps.api.app.models.webhook import WebhookEndpoint, WebhookDelivery, DeliveryStatus
-from apps.api.app.utils.ids import generate_ulid
-from apps.api.app.core.security import encrypt_field, decrypt_field
-from apps.api.app.core.config import settings
-from rq import Queue
 from redis import Redis
+from rq import Queue
+from sqlalchemy import and_
+from sqlalchemy.orm import Session
+
+from apps.api.app.core.config import settings
+from apps.api.app.core.security import encrypt_field
+from apps.api.app.models.webhook import DeliveryStatus, WebhookDelivery, WebhookEndpoint
+from apps.api.app.utils.ids import generate_ulid
 
 redis_conn = Redis.from_url(settings.redis_url)
 webhook_queue = Queue("consentvault", connection=redis_conn)

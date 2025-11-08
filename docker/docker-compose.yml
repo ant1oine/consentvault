@@ -19,6 +19,7 @@ services:
       MASTER_ENCRYPTION_KEY: "n8PLSoEOM5UEmRKbCTmnbwcsdLsfhufMD9kV3QuBn4c="
       RATE_LIMIT_PER_MIN: 60
       ALLOWED_ORIGINS: "http://localhost:3000,http://127.0.0.1:3000"
+      CORS_ORIGINS: "http://localhost:3000,http://127.0.0.1:3000"
       API_BODY_MAX_BYTES: 1048576
       ENABLE_HMAC_VERIFICATION: "true"
     depends_on:

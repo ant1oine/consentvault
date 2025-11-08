@@ -1,6 +1,7 @@
 """Audit log model."""
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Text
+from sqlalchemy import Column, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
+
 from apps.api.app.db.base import BaseModel
 
 

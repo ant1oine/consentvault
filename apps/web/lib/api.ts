@@ -140,16 +140,14 @@ async function fetchWithAuth(
     throw new Error('API key not found. Please configure it in settings.')
   }
 
-  const headers: Record<string, string> = {
-    'X-API-Key': apiKey,
-    'Content-Type': 'application/json',
-    ...options.headers,
-  }
+  const headers = new Headers(options.headers ?? {})
+  headers.set('X-API-Key', apiKey)
+  headers.set('Content-Type', 'application/json')
 
   // Add organization ID header if selected
   const orgId = getSelectedOrgId()
   if (orgId) {
-    headers['X-Organization-ID'] = orgId.toString()
+    headers.set('X-Organization-ID', orgId.toString())
   }
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -358,4 +356,3 @@ export async function toggleUserActive(id: string, data: UserToggleActive): Prom
   })
   return response.json()
 }
-

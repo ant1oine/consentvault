@@ -1,7 +1,7 @@
 """Error handlers for FastAPI application."""
+import structlog
 from fastapi import Request
 from fastapi.responses import JSONResponse
-import structlog
 
 from apps.api.app.core.errors import ForbiddenError
 

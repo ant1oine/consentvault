@@ -10,23 +10,21 @@ from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from apps.api.app.core.config import settings
-from apps.api.app.core.errors_handlers import forbidden_handler, generic_handler
 from apps.api.app.core.errors import ForbiddenError
+from apps.api.app.core.errors_handlers import forbidden_handler, generic_handler
 from apps.api.app.core.logging import configure_logging
 from apps.api.app.core.ratelimit import init_rate_limit
 from apps.api.app.routers import (
-    health,
+    audit,
     auth,
     auth_admin,
     consents,
-    rights,
-    webhooks,
-    audit,
+    health,
     organizations,
+    rights,
     users,
+    webhooks,
 )
-from apps.api.app.db.base import Base
-from apps.api.app.db.session import engine
 
 # Configure structured logging
 configure_logging()
@@ -84,7 +82,15 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
 
 # Environment-based middleware
 ENV = os.getenv("ENV", "development")
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+default_allowed_hosts = ["localhost", "127.0.0.1", "testserver"]
+env_allowed_hosts = os.getenv("ALLOWED_HOSTS")
+if env_allowed_hosts:
+    ALLOWED_HOSTS = [h.strip() for h in env_allowed_hosts.split(",") if h.strip()]
+else:
+    ALLOWED_HOSTS = list(default_allowed_hosts)
+# Ensure test clients are always permitted
+if "testserver" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append("testserver")
 
 # HTTPS redirect for staging/production
 if ENV in ("staging", "production"):
@@ -97,13 +103,25 @@ app.add_middleware(
 )
 
 # CORS middleware
-cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
-if cors_origins:
+cors_origins = settings.cors_origins_list or settings.allowed_origins_list
+wildcard_cors = False
+if not cors_origins and settings.env.lower() in {"local", "development"}:
+    wildcard_cors = True
+
+if wildcard_cors:
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[origin.strip() for origin in cors_origins if origin.strip()],
+        allow_origin_regex=".*",
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["*"],
+    )
+elif cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["*"],
     )
 
@@ -159,16 +177,15 @@ async def debug_env():
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This endpoint is only available in development/local environments"
         )
-    
+
     import os
-    from typing import Dict
-    
+
     # List of sensitive keys to mask
     sensitive_keys = {
         "password", "secret", "key", "token", "credential", "hmac", "encryption"
     }
-    
-    env_vars: Dict[str, str] = {}
+
+    env_vars: dict[str, str] = {}
     for key, value in os.environ.items():
         key_lower = key.lower()
         # Mask sensitive values
@@ -183,10 +200,9 @@ async def debug_env():
                 env_vars[key] = ""
         else:
             env_vars[key] = value
-    
+
     return {
         "environment": ENV,
         "variables": env_vars,
         "note": "Sensitive values are masked. This endpoint is only available in development/local."
     }
-

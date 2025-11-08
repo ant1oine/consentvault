@@ -1,8 +1,10 @@
 """API Key model."""
 import enum
-from datetime import datetime
-from sqlalchemy import Column, String, Integer, DateTime, Boolean, ForeignKey, Enum as SQLEnum
+
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import relationship
+
 from apps.api.app.db.base import BaseModel
 
 

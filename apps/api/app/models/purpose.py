@@ -1,5 +1,6 @@
 """Purpose model."""
-from sqlalchemy import Column, String, Integer, Boolean, ForeignKey, UniqueConstraint
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, UniqueConstraint
+
 from apps.api.app.db.base import BaseModel
 
 

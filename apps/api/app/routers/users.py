@@ -1,28 +1,27 @@
 """Users router for admin management."""
-from typing import List, Optional
-from fastapi import APIRouter, Depends, Request, Header
-from fastapi_limiter.depends import RateLimiter
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
+from apps.api.app.core.authz import get_organization_id, require_role
+from apps.api.app.core.ratelimit import optional_rate_limit
 from apps.api.app.db.session import get_db
 from apps.api.app.models.api_key import ApiKey
 from apps.api.app.schemas.user import (
     UserCreate,
-    UserUpdateRole,
-    UserToggleActive,
     UserResponse,
+    UserToggleActive,
+    UserUpdateRole,
 )
 from apps.api.app.services.user import UserService
-from apps.api.app.core.authz import get_organization_id, require_role
 
 router = APIRouter(
     prefix="/v1/admin/users",
     tags=["admin"],
-    dependencies=[Depends(RateLimiter(times=60, seconds=60))],
+    dependencies=[optional_rate_limit(times=60, seconds=60)],
 )
 
 
-@router.get("", response_model=List[UserResponse])
+@router.get("", response_model=list[UserResponse])
 async def list_users(
     request: Request,
     db: Session = Depends(get_db),
@@ -32,7 +31,7 @@ async def list_users(
     """List all users in the organization (ADMIN or AUDITOR only)."""
     user_service = UserService(db)
     users = user_service.list_users(org_id)
-    
+
     return [
         UserResponse(
             id=user.id,
@@ -57,12 +56,12 @@ async def create_user(
     api_key: ApiKey = Depends(require_role("ADMIN")),
 ):
     """Create a new user (ADMIN only)."""
-    
+
     # Get request fingerprint
     request_fingerprint = None
     if request.client:
         request_fingerprint = f"{request.client.host}:{request.headers.get('user-agent', '')}"
-    
+
     user_service = UserService(db)
     user = user_service.create_user(
         organization_id=org_id,
@@ -70,7 +69,7 @@ async def create_user(
         actor_api_key_id=api_key.id,
         request_fingerprint=request_fingerprint,
     )
-    
+
     return UserResponse(
         id=user.id,
         organization_id=user.organization_id,
@@ -93,12 +92,12 @@ async def update_user_role(
     api_key: ApiKey = Depends(require_role("ADMIN")),
 ):
     """Update user role (ADMIN only)."""
-    
+
     # Get request fingerprint
     request_fingerprint = None
     if request.client:
         request_fingerprint = f"{request.client.host}:{request.headers.get('user-agent', '')}"
-    
+
     user_service = UserService(db)
     user = user_service.update_role(
         user_id=user_id,
@@ -107,7 +106,7 @@ async def update_user_role(
         actor_api_key_id=api_key.id,
         request_fingerprint=request_fingerprint,
     )
-    
+
     return UserResponse(
         id=user.id,
         organization_id=user.organization_id,
@@ -130,12 +129,12 @@ async def toggle_user_active(
     api_key: ApiKey = Depends(require_role("ADMIN")),
 ):
     """Toggle user active status (ADMIN only)."""
-    
+
     # Get request fingerprint
     request_fingerprint = None
     if request.client:
         request_fingerprint = f"{request.client.host}:{request.headers.get('user-agent', '')}"
-    
+
     user_service = UserService(db)
     user = user_service.toggle_active(
         user_id=user_id,
@@ -144,7 +143,7 @@ async def toggle_user_active(
         actor_api_key_id=api_key.id,
         request_fingerprint=request_fingerprint,
     )
-    
+
     return UserResponse(
         id=user.id,
         organization_id=user.organization_id,
@@ -155,4 +154,3 @@ async def toggle_user_active(
         created_at=user.created_at.isoformat(),
         updated_at=user.updated_at.isoformat() if user.updated_at else user.created_at.isoformat(),
     )
-

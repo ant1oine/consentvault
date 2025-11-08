@@ -1,6 +1,9 @@
 """Organization model."""
 import enum
-from sqlalchemy import Column, String, Enum as SQLEnum
+
+from sqlalchemy import Column, String
+from sqlalchemy import Enum as SQLEnum
+
 from apps.api.app.db.base import BaseModel
 
 

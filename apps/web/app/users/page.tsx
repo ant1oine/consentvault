@@ -20,6 +20,7 @@ import { AddUserDialog } from '@/components/modals/AddUserDialog'
 import { useState } from 'react'
 import { Select } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import { queryKeys } from '@/lib/queryKeys'
 
 export default function UsersPage() {
   const [addDialogOpen, setAddDialogOpen] = useState(false)
@@ -27,7 +28,7 @@ export default function UsersPage() {
   const queryClient = useQueryClient()
 
   const { data: users, isLoading, error } = useQuery({
-    queryKey: ['users'],
+    queryKey: queryKeys.users(),
     queryFn: () => getUsers(),
   })
 
@@ -35,7 +36,7 @@ export default function UsersPage() {
     mutationFn: ({ id, role }: { id: string; role: 'ADMIN' | 'AUDITOR' | 'VIEWER' }) =>
       updateUserRole(id, { role }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.users() })
       toast.success('User role updated successfully')
     },
     onError: (error: Error) => {
@@ -47,7 +48,7 @@ export default function UsersPage() {
     mutationFn: ({ id, active }: { id: string; active: boolean }) =>
       toggleUserActive(id, { active }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.users() })
       toast.success('User status updated successfully')
     },
     onError: (error: Error) => {
@@ -114,7 +115,9 @@ export default function UsersPage() {
                 <p className="text-destructive mb-4">Failed to load users</p>
                 <Button
                   variant="outline"
-                  onClick={() => queryClient.invalidateQueries({ queryKey: ['users'] })}
+                  onClick={() =>
+                    queryClient.invalidateQueries({ queryKey: queryKeys.users() })
+                  }
                 >
                   Retry
                 </Button>
@@ -210,4 +213,3 @@ export default function UsersPage() {
     </div>
   )
 }
-

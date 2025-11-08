@@ -1,32 +1,30 @@
 """Admin authentication router (API keys, webhooks, purposes, policies)."""
 import secrets
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi_limiter.depends import RateLimiter
-from sqlalchemy.orm import Session
 from sqlalchemy import and_
+from sqlalchemy.orm import Session
 
+from apps.api.app.core.config import settings
+from apps.api.app.core.ratelimit import optional_rate_limit
+from apps.api.app.core.security import encrypt_field, hash_api_key
 from apps.api.app.db.session import get_db
 from apps.api.app.deps.auth import verify_api_key_auth
 from apps.api.app.models.api_key import ApiKey
 from apps.api.app.models.organization import Organization
 from apps.api.app.models.purpose import Purpose
 from apps.api.app.models.webhook import WebhookEndpoint
-from apps.api.app.models.policy import Policy
-from apps.api.app.schemas.api_key import ApiKeyCreate, ApiKeyResponse, ApiKeyCreateResponse
+from apps.api.app.schemas.api_key import ApiKeyCreate, ApiKeyCreateResponse, ApiKeyResponse
+from apps.api.app.schemas.policy import PolicyCreate, PolicyResponse
 from apps.api.app.schemas.purpose import PurposeCreate, PurposeResponse
 from apps.api.app.schemas.webhook import WebhookEndpointCreate, WebhookEndpointResponse
-from apps.api.app.schemas.policy import PolicyCreate, PolicyResponse
-from apps.api.app.core.security import hash_api_key, encrypt_field
-from apps.api.app.core.config import settings
-from apps.api.app.services.webhook import WebhookService
 from apps.api.app.services.policy import PolicyService
+from apps.api.app.services.webhook import WebhookService
 
 router = APIRouter(
     prefix="/v1/admin",
     tags=["admin"],
-    dependencies=[Depends(RateLimiter(times=60, seconds=60))],
+    dependencies=[optional_rate_limit(times=60, seconds=60)],
 )
 
 
@@ -73,7 +71,7 @@ async def create_api_key(
     )
 
 
-@router.get("/api-keys", response_model=List[ApiKeyResponse])
+@router.get("/api-keys", response_model=list[ApiKeyResponse])
 async def list_api_keys(
     db: Session = Depends(get_db),
     auth: tuple[ApiKey, Organization] = Depends(verify_api_key_auth),
@@ -105,7 +103,7 @@ async def create_purpose(
     return purpose
 
 
-@router.get("/purposes", response_model=List[PurposeResponse])
+@router.get("/purposes", response_model=list[PurposeResponse])
 async def list_purposes(
     db: Session = Depends(get_db),
     auth: tuple[ApiKey, Organization] = Depends(verify_api_key_auth),
@@ -131,7 +129,7 @@ async def create_webhook(
     return endpoint
 
 
-@router.get("/webhooks", response_model=List[WebhookEndpointResponse])
+@router.get("/webhooks", response_model=list[WebhookEndpointResponse])
 async def list_webhooks(
     db: Session = Depends(get_db),
     auth: tuple[ApiKey, Organization] = Depends(verify_api_key_auth),
@@ -182,7 +180,7 @@ async def create_policy(
     return policy
 
 
-@router.get("/policies", response_model=List[PolicyResponse])
+@router.get("/policies", response_model=list[PolicyResponse])
 async def list_policies(
     db: Session = Depends(get_db),
     auth: tuple[ApiKey, Organization] = Depends(verify_api_key_auth),
@@ -192,5 +190,4 @@ async def list_policies(
     policy_service = PolicyService(db)
     policies = policy_service.list_policies(org.id)
     return policies
-
 

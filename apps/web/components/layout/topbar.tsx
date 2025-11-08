@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Settings, Lock } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Settings, Lock, LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -9,58 +9,88 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
-import { useQuery } from '@tanstack/react-query'
-import { getOrganizations, Organization } from '@/lib/api'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  getOrganizations,
+  Organization,
+  getConsents,
+  getRights,
+  getPurposes,
+  getUsers,
+  getPolicies,
+  getWebhooks,
+  getAuditLogs,
+} from '@/lib/api'
+import { queryKeys } from '@/lib/queryKeys'
+
+const STORAGE_KEY = 'consentvault_api_key'
+const ORG_KEY = 'selectedOrgId'
 
 export function TopBar() {
   const [apiKey, setApiKey] = useState<string>('')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [hasApiKey, setHasApiKey] = useState(false)
   const [selectedOrgId, setSelectedOrgId] = useState<number | null>(null)
+  const queryClient = useQueryClient()
+  const lastPrefetchedOrg = useRef<number | null>(null)
 
   const { data: organizations } = useQuery({
-    queryKey: ['organizations'],
+    queryKey: queryKeys.organizations(),
     queryFn: () => getOrganizations(),
     enabled: hasApiKey,
     retry: false,
   })
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('consentvault_api_key')
-      setHasApiKey(!!stored)
-      if (stored) {
-        setApiKey(stored)
-      }
-
-      // Load selected organization
-      const storedOrgId = localStorage.getItem('selectedOrgId')
-      if (storedOrgId) {
-        setSelectedOrgId(parseInt(storedOrgId, 10))
-      }
+    if (typeof window === 'undefined') return
+    const stored = localStorage.getItem(STORAGE_KEY)
+    setHasApiKey(!!stored)
+    if (stored) {
+      setApiKey(stored)
+    }
+    const storedOrg = localStorage.getItem(ORG_KEY)
+    if (storedOrg) {
+      setSelectedOrgId(parseInt(storedOrg, 10))
     }
   }, [])
 
-  // Set default organization when organizations load
   useEffect(() => {
     if (organizations && organizations.length > 0 && !selectedOrgId) {
       const firstOrgId = organizations[0].id
       setSelectedOrgId(firstOrgId)
       if (typeof window !== 'undefined') {
-        localStorage.setItem('selectedOrgId', firstOrgId.toString())
+        localStorage.setItem(ORG_KEY, firstOrgId.toString())
       }
     }
   }, [organizations, selectedOrgId])
 
+  const invalidateOrgScopedQueries = () => {
+    const scopedKeys = [
+      queryKeys.consents({ limit: 100 }),
+      queryKeys.consents({ limit: 1000 }),
+      queryKeys.rights(),
+      queryKeys.users(),
+      queryKeys.purposes(),
+      queryKeys.policies(),
+      queryKeys.webhooks(),
+      queryKeys.auditLogs(),
+    ]
+    scopedKeys.forEach((key) =>
+      queryClient.invalidateQueries({ queryKey: key })
+    )
+  }
+
   const handleOrgChange = (orgId: number) => {
     setSelectedOrgId(orgId)
     if (typeof window !== 'undefined') {
-      localStorage.setItem('selectedOrgId', orgId.toString())
+      localStorage.setItem(ORG_KEY, orgId.toString())
     }
+    invalidateOrgScopedQueries()
     toast.success('Organization switched')
   }
 
@@ -69,21 +99,74 @@ export function TopBar() {
       toast.error('Please enter an API key')
       return
     }
-    localStorage.setItem('consentvault_api_key', apiKey)
+    localStorage.setItem(STORAGE_KEY, apiKey)
     setHasApiKey(true)
     setSettingsOpen(false)
     toast.success('API key saved successfully')
+    queryClient.clear()
     window.location.reload()
   }
 
-  const handleClearApiKey = () => {
-    localStorage.removeItem('consentvault_api_key')
+  const handleLogout = () => {
+    localStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem(ORG_KEY)
     setApiKey('')
     setHasApiKey(false)
     setSettingsOpen(false)
-    toast.success('API key cleared')
+    setSelectedOrgId(null)
+    queryClient.clear()
+    toast.success('Signed out')
     window.location.reload()
   }
+
+  useEffect(() => {
+    if (!hasApiKey || !selectedOrgId) {
+      return
+    }
+    if (lastPrefetchedOrg.current === selectedOrgId) {
+      return
+    }
+    lastPrefetchedOrg.current = selectedOrgId
+
+    void queryClient.prefetchQuery({
+      queryKey: queryKeys.consents({ limit: 100 }),
+      queryFn: () => getConsents({ limit: 100 }),
+    })
+    void queryClient.prefetchQuery({
+      queryKey: queryKeys.consents({ limit: 1000 }),
+      queryFn: () => getConsents({ limit: 1000 }),
+    })
+    void queryClient.prefetchQuery({
+      queryKey: queryKeys.rights(),
+      queryFn: () => getRights(),
+    })
+    void queryClient.prefetchQuery({
+      queryKey: queryKeys.users(),
+      queryFn: () => getUsers(),
+    })
+    void queryClient.prefetchQuery({
+      queryKey: queryKeys.purposes(),
+      queryFn: () => getPurposes(),
+    })
+    void queryClient.prefetchQuery({
+      queryKey: queryKeys.policies(),
+      queryFn: () => getPolicies(),
+    })
+    void queryClient.prefetchQuery({
+      queryKey: queryKeys.webhooks(),
+      queryFn: () => getWebhooks(),
+    })
+    void queryClient.prefetchQuery({
+      queryKey: queryKeys.organizations(),
+      queryFn: () => getOrganizations(),
+    })
+    void queryClient.prefetchInfiniteQuery({
+      queryKey: queryKeys.auditLogs(),
+      queryFn: ({ pageParam = 0 }) =>
+        getAuditLogs({ limit: 50, offset: pageParam }),
+      initialPageParam: 0,
+    })
+  }, [hasApiKey, selectedOrgId, queryClient])
 
   return (
     <>
@@ -112,13 +195,21 @@ export function TopBar() {
             )}
           </select>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setSettingsOpen(true)}
-        >
-          <Settings className="h-5 w-5" />
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Settings className="h-5 w-5" />
+          </Button>
+          {hasApiKey && (
+            <Button variant="outline" size="sm" onClick={handleLogout}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Log out
+            </Button>
+          )}
+        </div>
       </div>
 
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
@@ -147,14 +238,15 @@ export function TopBar() {
               {hasApiKey && (
                 <Button
                   variant="outline"
-                  onClick={handleClearApiKey}
+                  onClick={handleLogout}
                   className="flex-1"
                 >
-                  Clear
+                  Log out
                 </Button>
               )}
             </div>
           </div>
+          <DialogFooter />
         </DialogContent>
       </Dialog>
     </>
@@ -169,7 +261,7 @@ export function LockScreen() {
       toast.error('Please enter an API key')
       return
     }
-    localStorage.setItem('consentvault_api_key', apiKey)
+    localStorage.setItem(STORAGE_KEY, apiKey)
     toast.success('API key saved successfully')
     window.location.reload()
   }
@@ -212,4 +304,3 @@ export function LockScreen() {
     </div>
   )
 }
-

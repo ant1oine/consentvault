@@ -1,6 +1,6 @@
 # ConsentVault On-Call Runbook
 
-Quick reference for common production operations.
+Quick reference for common production operations. For architecture or developer onboarding, see the other files in `docs/`.
 
 ## Restart Services
 
@@ -302,4 +302,3 @@ For issues not covered here, check:
 - Application logs: `docker compose logs api`
 - Database logs: `docker compose logs db`
 - System logs: `journalctl` or cloud provider logs
-
