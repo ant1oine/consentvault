@@ -59,19 +59,19 @@ _enum_cache: dict[str, Any] = {}
 def get_enum_value(enum_class: type[enum.Enum], desired_label: str, prefer_name: bool = True) -> str | None:
     """
     Get enum value by case-insensitive label matching.
-    
+
     Args:
         enum_class: The enum class (e.g., OrganizationStatus)
         desired_label: The desired label (case-insensitive, e.g., "active", "ACTIVE", "Active")
         prefer_name: If True, prefer matching enum member name over value (for DB compatibility)
-        
+
     Returns:
         The enum's value string (or name if prefer_name=True and DB uses names), or None if not found
-        
+
     Note:
         PostgreSQL enums created by SQLAlchemy typically use the enum member NAME (uppercase),
         not the enum VALUE. This function handles both cases.
-        
+
     Example:
         >>> get_enum_value(OrganizationStatus, "active")
         "ACTIVE"  # Returns member name if DB uses names, or "active" if DB uses values
@@ -118,11 +118,11 @@ def get_enum_value(enum_class: type[enum.Enum], desired_label: str, prefer_name:
 def get_db_enum_values(conn, enum_name: str) -> list[str]:
     """
     Dynamically fetch enum values from Postgres.
-    
+
     Args:
         conn: SQLAlchemy connection
         enum_name: Name of the enum type in Postgres (e.g., 'organizationstatus')
-        
+
     Returns:
         List of enum values as strings
     """
@@ -148,7 +148,7 @@ def get_db_enum_values(conn, enum_name: str) -> list[str]:
 def verify_enum_consistency(conn) -> bool:
     """
     Verify that database enum values match Python enum members.
-    
+
     Returns:
         True if all enums are consistent, False otherwise
     """
@@ -202,10 +202,10 @@ def verify_enum_consistency(conn) -> bool:
             # Show what matched
             if matches_names:
                 match_type = "names"
-                matched = sorted(matches_names)
+                sorted(matches_names)
             else:
                 match_type = "values"
-                matched = sorted(matches_values)
+                sorted(matches_values)
 
             print_colored(
                 f"   ✅ {python_enum_class.__name__} enum synced (matched by {match_type})",

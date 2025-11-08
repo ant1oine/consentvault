@@ -38,7 +38,7 @@ async def verify_api_key_auth(
 
     # Find API key by checking hash against all active keys
     # In production, you might want to index by a key prefix for faster lookup
-    api_keys = db.query(ApiKey).filter(ApiKey.active == True).all()
+    api_keys = db.query(ApiKey).filter(ApiKey.active).all()
 
     matched_key = None
     for key in api_keys:
@@ -101,14 +101,14 @@ except ImportError:
     def get_current_user(*args, **kwargs):
         """
         Get current authenticated user from JWT token.
-        
+
         This is an alias for get_current_user_from_token from the auth router.
         Verifies token, checks blacklist, and returns User object.
-        
+
         Usage:
             from apps.api.app.deps.auth import get_current_user
             from apps.api.app.models.user import User
-            
+
             @router.get("/protected")
             def protected_route(current_user: User = Depends(get_current_user)):
                 ...

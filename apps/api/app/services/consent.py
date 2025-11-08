@@ -47,7 +47,7 @@ class ConsentService:
                 and_(
                     Purpose.organization_id == organization_id,
                     Purpose.code == purpose_code,
-                    Purpose.active == True,
+                    Purpose.active,
                 )
             )
             .first()

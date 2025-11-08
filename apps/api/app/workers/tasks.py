@@ -68,7 +68,7 @@ def deliver_webhook(delivery_id: str) -> None:
 
         # Retry logic: exponential backoff
         if delivery.status == DeliveryStatus.FAILED and delivery.attempt_count < 6:
-            backoff_seconds = [60, 300, 1800, 7200, 21600][delivery.attempt_count - 1]
+            [60, 300, 1800, 7200, 21600][delivery.attempt_count - 1]
             # Re-enqueue with delay (RQ doesn't support delay natively, so we'd need scheduler)
             # For now, just mark as failed - scheduler can pick up later
             pass

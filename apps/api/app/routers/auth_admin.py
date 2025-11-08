@@ -149,7 +149,7 @@ async def delete_webhook(
 ):
     """Delete a webhook endpoint (admin only)."""
     api_key, org = auth
-    webhook_service = WebhookService(db)
+    WebhookService(db)
     endpoint = (
         db.query(WebhookEndpoint)
         .filter(

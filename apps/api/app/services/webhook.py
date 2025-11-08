@@ -55,7 +55,7 @@ class WebhookService:
             .filter(
                 and_(
                     WebhookEndpoint.organization_id == organization_id,
-                    WebhookEndpoint.active == True,
+                    WebhookEndpoint.active,
                 )
             )
             .all()

@@ -95,11 +95,11 @@ JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 30
 def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
     """
     Create a JWT access token.
-    
+
     Args:
         data: Dictionary containing claims (e.g., {"sub": user_id, "email": email})
         expires_delta: Optional expiration time delta
-        
+
     Returns:
         Encoded JWT token string
     """
@@ -118,13 +118,13 @@ def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = 
 def verify_token(token: str) -> dict[str, Any]:
     """
     Verify and decode a JWT token.
-    
+
     Args:
         token: JWT token string
-        
+
     Returns:
         Decoded token payload
-        
+
     Raises:
         JWTError: If token is invalid or expired
     """

@@ -32,7 +32,7 @@ def login(
 ):
     """
     Authenticate user and return JWT access token.
-    
+
     Note: For now, this accepts email as username and a simple password.
     In production, implement proper password hashing and verification.
     """
@@ -79,7 +79,7 @@ def logout(
 ):
     """
     Invalidate the current JWT token by blacklisting it in Redis.
-    
+
     The token will be rejected for all subsequent requests until it expires naturally.
     """
     if not token:
@@ -119,12 +119,12 @@ def get_current_user_from_token(
 ) -> User:
     """
     Dependency to get current authenticated user from JWT token.
-    
+
     Verifies token, checks blacklist, and returns User object.
-    
+
     Usage in other routers:
         from apps.api.app.routers.auth import get_current_user_from_token
-        
+
         @router.get("/protected")
         def protected_route(current_user: User = Depends(get_current_user_from_token)):
             ...
@@ -165,7 +165,7 @@ def get_current_user_info(
 ):
     """
     Get current authenticated user information.
-    
+
     This endpoint requires a valid JWT token in the Authorization header.
     """
     return {

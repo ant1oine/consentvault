@@ -168,7 +168,7 @@ async def root():
 async def debug_env():
     """
     Debug endpoint to show environment variables (local/dev only).
-    
+
     Masks sensitive values like passwords and keys.
     """
     if ENV not in ("development", "local"):
