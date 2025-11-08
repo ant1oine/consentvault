@@ -1,6 +1,7 @@
 """Alembic environment configuration."""
 from logging.config import fileConfig
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import engine_from_config, pool, text
+from sqlalchemy.engine import Connection
 from alembic import context
 import sys
 from pathlib import Path
@@ -35,6 +36,31 @@ def run_migrations_offline():
         context.run_migrations()
 
 
+def pre_cleanup_stale_enums(engine):
+    """
+    Run before Alembic migrations start.
+    Ensures that stale user-defined enum types (like userrole_enum)
+    are dropped outside of the Alembic transactional context.
+    """
+    with engine.connect() as conn:
+        print("🔍 Checking for stale enums before migration...")
+        enums = conn.execute(
+            text("""
+                SELECT n.nspname, t.typname
+                FROM pg_type t
+                JOIN pg_namespace n ON n.oid = t.typnamespace
+                WHERE t.typname ILIKE '%userrole%'
+                AND n.nspname NOT IN ('pg_catalog', 'information_schema');
+            """)
+        ).fetchall()
+
+        for schema, name in enums:
+            print(f"⚠️  Dropping stale enum before migration: {schema}.{name}")
+            conn.execute(text(f'DROP TYPE IF EXISTS "{schema}"."{name}" CASCADE;'))
+        conn.commit()
+        print("✅ Enum cleanup complete.")
+
+
 def run_migrations_online():
     """Run migrations in 'online' mode."""
     connectable = engine_from_config(
@@ -42,6 +68,10 @@ def run_migrations_online():
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
+
+    # 🧹 Clean stale enums *before* entering Alembic's transaction context
+    pre_cleanup_stale_enums(connectable)
+
     with connectable.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata)
         with context.begin_transaction():

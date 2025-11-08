@@ -207,6 +207,126 @@ docker compose exec api alembic downgrade -1
 
 **Note:** No local Python dependencies required. All migrations, Alembic, and psycopg run inside the container environment.
 
+Alembic migrations now rely on SQLAlchemy's inline enum creation. Manual `.create()` calls have been removed to prevent duplicate DDL execution.
+
+### Database Migrations & RBAC Enum Safety
+
+ConsentVault uses Alembic + SQLAlchemy for schema versioning. The migration system has been hardened for enum safety, dev resets, and RBAC evolution.
+
+#### 1. Running Migrations
+
+Run migrations inside Docker:
+
+```bash
+# Apply all migrations
+docker compose exec api alembic upgrade head
+
+# Check current migration version
+docker compose exec api alembic current
+
+# Roll back to base
+docker compose exec api alembic downgrade base
+```
+
+Migrations automatically run a pre-flight enum cleanup before applying changes:
+
+```
+🔍 Checking for stale enums before migration...
+✅ Enum cleanup complete.
+```
+
+This ensures your schema never fails with `psycopg.errors.DuplicateObject: type "userrole_enum" already exists`.
+
+#### 2. RBAC Roles & Enum Storage
+
+ConsentVault enforces Role-Based Access Control (RBAC) with three roles:
+
+| Role | Permissions |
+|------|-------------|
+| **ADMIN** | Full access to organizations, users, and data |
+| **AUDITOR** | Read-only access to compliance and audit logs |
+| **VIEWER** | Restricted, minimal access to dashboards only |
+
+**Storage Strategy:**
+
+Roles are stored as `VARCHAR(7)` for maximum migration stability.
+
+Validation occurs at the ORM + API level via the `require_role()` dependency.
+
+This prevents PostgreSQL enum duplication issues during migration.
+
+- ✅ **Recommended:** keep roles as VARCHAR.
+- ❗ **Optional:** convert to native Postgres enum later if desired.
+
+To convert later (optional):
+
+```sql
+CREATE TYPE userrole_enum AS ENUM ('ADMIN', 'AUDITOR', 'VIEWER');
+ALTER TABLE users
+  ALTER COLUMN role TYPE userrole_enum
+  USING role::userrole_enum;
+```
+
+#### 3. Development Data Reset
+
+A safe, dev-only reset script is included to restore a clean state for local testing.
+
+```bash
+docker compose exec -e ENV=development api python apps/api/scripts/reset_dev_data.py
+```
+
+If you accidentally run it outside dev mode, you'll see:
+
+```
+❌ This script can only run in development mode.
+```
+
+**What it does:**
+
+- Auto-creates a default organization if none exist
+- Keeps the most recent organization (or the newly created one)
+- Reassigns all API keys to that org
+- Clears audit logs, consents, and other non-critical data
+- Seeds a default admin user `admin@example.com` (role=ADMIN)
+
+#### 4. Local Verification Commands
+
+```bash
+# Check the schema
+docker compose exec db psql -U consentvault -d consentvault -c "\d users"
+
+# See applied migrations
+docker compose exec api alembic history
+
+# Check current head
+docker compose exec api alembic current
+```
+
+Expected result for the users table:
+
+```
+role | character varying(7) | not null | default 'VIEWER'::character varying
+```
+
+#### 5. CI/CD Recommendation
+
+In your CI pipeline:
+
+```bash
+docker compose exec api alembic upgrade head
+docker compose exec api alembic current
+```
+
+This ensures schema alignment before deploy. No manual cleanup or enum handling is ever required.
+
+**Summary:**
+
+- ✅ Migrations are idempotent and safe to rerun.
+- ✅ Enum cleanup runs automatically pre-migration.
+- ✅ RBAC uses a simple and flexible VARCHAR schema.
+- ✅ Dev reset is isolated and secure.
+- ✅ Production migrations are deterministic and CI-ready.
+
 ## Testing
 
 ```bash
@@ -238,6 +358,71 @@ See `.env.example` for configuration:
 - **Scaling**: Single node ready; can move to K8s later
 
 ## Development
+
+### 🔄 Resetting Development Data
+
+To fully reset your local database (organizations, users, API keys, and sample data):
+
+```bash
+docker compose exec -e ENV=development api python apps/api/scripts/reset_dev_data.py
+```
+
+The script will:
+- Auto-create a default organization if none exist
+- Seed a default admin user (`admin@example.com` / role=ADMIN)
+- Reassign and clean related tables
+
+⚠️ **Do not run in production.** The script only runs when `ENV=development`.
+
+**What it does:**
+- Keeps the latest organization (by `created_at`) or creates one if none exist
+- Reassigns all API keys and users to that organization
+- Deletes all other organizations
+- Clears all tenant data tables (users, consents, rights, audit_logs, webhooks, purposes, etc.)
+- Resets all ID sequences to start from 1
+- Seeds a default admin user: `admin@example.com` (role: ADMIN)
+
+**Note:** The script uses isolated transactions to safely recover from partial failures. Each operation is committed independently, so a single failure won't abort the entire script.
+
+### RBAC & User Management
+
+ConsentVault now includes an organization-scoped user system with roles:
+- **ADMIN**: Full access to all features
+- **AUDITOR**: Read-only access with audit capabilities
+- **VIEWER**: Read-only access
+
+Run migrations to apply this:
+
+```bash
+docker compose exec api alembic upgrade head
+```
+
+In development, you can reset and reseed users using:
+
+```bash
+docker compose exec -e ENV=development api python apps/api/scripts/reset_dev_data.py
+```
+
+### Enum Type Safety
+
+All Alembic migrations now include a pre-flight enum cleanup.
+
+If a migration previously failed due to `DuplicateObject: type already exists`,
+it will automatically drop and recreate the enum type before continuing.
+
+This makes migrations idempotent and safe to reapply.
+
+Alembic now runs a pre-migration cleanup step that automatically drops stale enum types (like `userrole_enum`) before any migrations begin. This ensures a clean state and prevents duplicate enum errors.
+
+**Note:** The migration cleanup logic now automatically skips system schemas (`pg_catalog`, `information_schema`) to avoid internal PostgreSQL types.
+
+**Implementation:** Enums are now cleaned and committed before migration runs. This guarantees idempotent migrations and removes the "userrole_enum already exists" error completely.
+
+Migrations are now idempotent. Enum creation uses safe `DROP IF EXISTS` and `checkfirst=True` to prevent 'type already exists' errors on re-apply.
+
+**Safety:** This cleanup is only run inside Alembic — it does not modify production data outside of migrations. It's safe for development and staging environments. For production, ensure backups are taken before any migration (as usual).
+
+### Code Quality
 
 ```bash
 # Format code

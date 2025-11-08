@@ -10,11 +10,9 @@ RUN apt-get update && apt-get install -y \
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir -e ".[dev]"
 
-# Explicitly ensure psycopg, alembic, and argon2-cffi are installed for migrations
-RUN pip install --no-cache-dir psycopg[binary] alembic argon2-cffi
+# ✅ Explicitly install required runtime dependencies
+RUN pip install --no-cache-dir psycopg[binary] alembic argon2-cffi "pydantic[email]"
 
 COPY . .
 
 CMD ["uvicorn", "apps.api.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-
-

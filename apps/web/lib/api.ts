@@ -304,3 +304,58 @@ export async function createOrganization(data: OrgCreate): Promise<CreateOrgResp
   return response.json()
 }
 
+// Users
+export type User = {
+  id: string
+  organization_id: number
+  email: string
+  display_name?: string | null
+  role: 'ADMIN' | 'AUDITOR' | 'VIEWER'
+  active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type UserCreate = {
+  email: string
+  display_name?: string
+  role?: 'ADMIN' | 'AUDITOR' | 'VIEWER'
+}
+
+export type UserUpdateRole = {
+  role: 'ADMIN' | 'AUDITOR' | 'VIEWER'
+}
+
+export type UserToggleActive = {
+  active: boolean
+}
+
+export async function getUsers(): Promise<User[]> {
+  const response = await fetchWithAuth('/v1/admin/users')
+  return response.json()
+}
+
+export async function createUser(data: UserCreate): Promise<User> {
+  const response = await fetchWithAuth('/v1/admin/users', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+  return response.json()
+}
+
+export async function updateUserRole(id: string, data: UserUpdateRole): Promise<User> {
+  const response = await fetchWithAuth(`/v1/admin/users/${id}/role`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+  return response.json()
+}
+
+export async function toggleUserActive(id: string, data: UserToggleActive): Promise<User> {
+  const response = await fetchWithAuth(`/v1/admin/users/${id}/active`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+  return response.json()
+}
+

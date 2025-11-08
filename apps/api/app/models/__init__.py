@@ -8,6 +8,7 @@ from apps.api.app.models.rights import DataRightRequest
 from apps.api.app.models.policy import Policy
 from apps.api.app.models.webhook import WebhookEndpoint, WebhookDelivery
 from apps.api.app.models.audit import AuditLog
+from apps.api.app.models.user import User
 
 __all__ = [
     "Organization",
@@ -21,6 +22,7 @@ __all__ = [
     "WebhookEndpoint",
     "WebhookDelivery",
     "AuditLog",
+    "User",
 ]
 
 
