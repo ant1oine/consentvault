@@ -3,10 +3,13 @@ name: Production Deployment
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
-    branches:
-      - main
+    inputs:
+      manual:
+        description: "Trigger manual production deployment"
+        required: false
+        default: "true"
 
 env:
   AWS_REGION: me-central-1
@@ -34,27 +37,16 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
-        id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build Docker image
-        id: build-image
+      - name: Build and push image
         env:
           IMAGE_TAG: ${{ github.sha }}
         run: |
           docker build -f api.Dockerfile.prod -t $ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REPOSITORY:latest .
-          echo "image=$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-
-      - name: Push Docker image to ECR
-        env:
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
           docker push $ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REPOSITORY:latest
-
-      - name: Output image URI
-        run: |
-          echo "Image pushed: $ECR_REPOSITORY:${{ github.sha }}"
+          echo "image=$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
   deploy-infra:
     name: Deploy Infrastructure (Terraform)
@@ -65,34 +57,23 @@ jobs:
       contents: read
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.5.0
 
-      - name: Terraform Init
-        working-directory: infra/terraform
-        run: terraform init
-
-      - name: Terraform Plan
+      - name: Terraform Init/Plan/Apply
         working-directory: infra/terraform
         run: |
-          terraform plan \
-            -var="domain_name=${{ secrets.PROD_DOMAIN }}" \
-            -out=tfplan
-
-      - name: Terraform Apply
-        working-directory: infra/terraform
-        run: terraform apply -auto-approve tfplan
+          terraform init
+          terraform plan -var="domain_name=${{ secrets.PROD_DOMAIN }}" -out=tfplan
+          terraform apply -auto-approve tfplan
 
   deploy-ecs:
     name: Deploy to ECS
@@ -103,185 +84,39 @@ jobs:
       contents: read
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-
-      - name: Get ECR repository URI
-        id: ecr-repo
-        run: |
-          REPO_URI=$(aws ecr describe-repositories --repository-names $ECR_REPOSITORY --region $AWS_REGION --query 'repositories[0].repositoryUri' --output text)
-          echo "repo_uri=$REPO_URI" >> $GITHUB_OUTPUT
-
-      - name: Get current task definition
-        id: task-def
-        run: |
-          TASK_DEF=$(aws ecs describe-task-definition \
-            --task-definition $ECS_TASK_DEFINITION \
-            --region $AWS_REGION \
-            --query 'taskDefinition' \
-            --output json)
-          echo "$TASK_DEF" > task-definition.json
-          echo "task_def_file=task-definition.json" >> $GITHUB_OUTPUT
-
-      - name: Update task definition with new image
-        run: |
-          NEW_IMAGE="${{ steps.ecr-repo.outputs.repo_uri }}:${{ github.sha }}"
-          jq ".containerDefinitions[0].image = \"$NEW_IMAGE\"" task-definition.json > task-definition-new.json
-          # Remove fields that can't be in register-task-definition
-          jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy)' task-definition-new.json > task-definition-final.json
-
-      - name: Register new task definition
-        id: register-task
-        run: |
-          TASK_DEF_ARN=$(aws ecs register-task-definition \
-            --cli-input-json file://task-definition-final.json \
-            --region $AWS_REGION \
-            --query 'taskDefinition.taskDefinitionArn' \
-            --output text)
-          echo "task_def_arn=$TASK_DEF_ARN" >> $GITHUB_OUTPUT
 
       - name: Update ECS service
         run: |
-          aws ecs update-service \
-            --cluster $ECS_CLUSTER \
-            --service $ECS_SERVICE \
-            --task-definition ${{ steps.register-task.outputs.task_def_arn }} \
-            --region $AWS_REGION \
-            --force-new-deployment
-
-      - name: Wait for service stability
-        run: |
-          aws ecs wait services-stable \
-            --cluster $ECS_CLUSTER \
-            --services $ECS_SERVICE \
-            --region $AWS_REGION
-
-  run-migrations:
-    name: Run Database Migrations
-    runs-on: ubuntu-latest
-    needs: [build-and-push, deploy-infra]
-    permissions:
-      id-token: write
-      contents: read
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Get VPC and subnet information
-        id: vpc-info
-        run: |
-          VPC_ID=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=consentvault-prod-vpc" --region $AWS_REGION --query 'Vpcs[0].VpcId' --output text)
-          SUBNET_IDS=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$VPC_ID" "Name=tag:Type,Values=private" --region $AWS_REGION --query 'Subnets[*].SubnetId' --output text | tr '\t' ',')
-          SG_ID=$(aws ec2 describe-security-groups --filters "Name=tag:Name,Values=consentvault-prod-api-sg" --region $AWS_REGION --query 'SecurityGroups[0].GroupId' --output text)
-          
-          echo "vpc_id=$VPC_ID" >> $GITHUB_OUTPUT
-          echo "subnet_ids=$SUBNET_IDS" >> $GITHUB_OUTPUT
-          echo "sg_id=$SG_ID" >> $GITHUB_OUTPUT
-
-      - name: Get ECR repository URI
-        id: ecr-repo
-        run: |
           REPO_URI=$(aws ecr describe-repositories --repository-names $ECR_REPOSITORY --region $AWS_REGION --query 'repositories[0].repositoryUri' --output text)
-          echo "repo_uri=$REPO_URI" >> $GITHUB_OUTPUT
-
-      - name: Get task definition for migration
-        id: task-def
-        run: |
-          TASK_DEF=$(aws ecs describe-task-definition \
-            --task-definition $ECS_TASK_DEFINITION \
-            --region $AWS_REGION \
-            --query 'taskDefinition' \
-            --output json)
-          echo "$TASK_DEF" > migration-task-def.json
-
-      - name: Create migration task definition override
-        run: |
-          NEW_IMAGE="${{ steps.ecr-repo.outputs.repo_uri }}:${{ github.sha }}"
-          jq ".containerDefinitions[0].image = \"$NEW_IMAGE\"" migration-task-def.json > migration-task-def-new.json
-          jq ".containerDefinitions[0].command = [\"alembic\", \"upgrade\", \"head\"]" migration-task-def-new.json > migration-task-def-final.json
-
-      - name: Run migration task
-        id: run-migration
-        run: |
-          TASK_ARN=$(aws ecs run-task \
-            --cluster $ECS_CLUSTER \
-            --task-definition $ECS_TASK_DEFINITION \
-            --launch-type FARGATE \
-            --network-configuration "awsvpcConfiguration={subnets=[${{ steps.vpc-info.outputs.subnet_ids }}],securityGroups=[${{ steps.vpc-info.outputs.sg_id }}],assignPublicIp=DISABLED}" \
-            --overrides file://migration-task-def-final.json \
-            --region $AWS_REGION \
-            --query 'tasks[0].taskArn' \
-            --output text)
-          echo "task_arn=$TASK_ARN" >> $GITHUB_OUTPUT
-
-      - name: Wait for migration task to complete
-        run: |
-          aws ecs wait tasks-stopped \
-            --cluster $ECS_CLUSTER \
-            --tasks ${{ steps.run-migration.outputs.task_arn }} \
-            --region $AWS_REGION
-
-      - name: Check migration task exit code
-        run: |
-          EXIT_CODE=$(aws ecs describe-tasks \
-            --cluster $ECS_CLUSTER \
-            --tasks ${{ steps.run-migration.outputs.task_arn }} \
-            --region $AWS_REGION \
-            --query 'tasks[0].containers[0].exitCode' \
-            --output text)
-          
-          if [ "$EXIT_CODE" != "0" ]; then
-            echo "Migration failed with exit code $EXIT_CODE"
-            aws logs tail /ecs/consentvault-prod-api --since 10m --region $AWS_REGION || true
-            exit 1
-          fi
-          echo "Migration completed successfully"
+          NEW_IMAGE="${REPO_URI}:${{ github.sha }}"
+          TASK_DEF=$(aws ecs describe-task-definition --task-definition $ECS_TASK_DEFINITION --region $AWS_REGION --query 'taskDefinition' --output json)
+          echo "$TASK_DEF" | jq ".containerDefinitions[0].image = \"$NEW_IMAGE\"" > new-task-def.json
+          jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .registeredAt, .registeredBy, .compatibilities)' new-task-def.json > final.json
+          TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://final.json --region $AWS_REGION --query 'taskDefinition.taskDefinitionArn' --output text)
+          aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE --task-definition "$TASK_DEF_ARN" --region $AWS_REGION --force-new-deployment
+          aws ecs wait services-stable --cluster $ECS_CLUSTER --services $ECS_SERVICE --region $AWS_REGION
 
   smoke-tests:
     name: Smoke Tests
     runs-on: ubuntu-latest
-    needs: [deploy-ecs, run-migrations]
-    permissions:
-      contents: read
-
+    needs: [deploy-ecs]
     steps:
-      - name: Check health endpoint
+      - name: Verify health endpoints
         run: |
-          API_URL="https://api.${{ secrets.PROD_DOMAIN }}/healthz"
-          echo "Testing $API_URL"
-          
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL" || echo "000")
-          
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "✅ Health check passed"
-          else
-            echo "❌ Health check failed with HTTP $HTTP_CODE"
-            exit 1
-          fi
-
-      - name: Check metrics endpoint
-        run: |
-          API_URL="https://api.${{ secrets.PROD_DOMAIN }}/metrics"
-          echo "Testing $API_URL"
-          
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL" || echo "000")
-          
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "✅ Metrics endpoint accessible"
-          else
-            echo "⚠️ Metrics endpoint returned HTTP $HTTP_CODE (may be expected)"
-          fi
-
+          API_URL="https://api.${{ secrets.PROD_DOMAIN }}"
+          for path in healthz metrics; do
+            echo "Testing $API_URL/$path"
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL/$path" || echo "000")
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ $path check passed"
+            else
+              echo "❌ $path check failed with $HTTP_CODE"
+              exit 1
+            fi
+          done
