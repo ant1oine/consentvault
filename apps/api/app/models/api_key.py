@@ -1,8 +1,17 @@
 """API Key model."""
+import enum
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, DateTime, Boolean, ForeignKey
+from sqlalchemy import Column, String, Integer, DateTime, Boolean, ForeignKey, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from apps.api.app.db.base import BaseModel
+
+
+class ApiKeyRole(str, enum.Enum):
+    """API Key role enum (for future RBAC)."""
+
+    ADMIN = "admin"
+    AUDITOR = "auditor"
+    VIEWER = "viewer"
 
 
 class ApiKey(BaseModel):
@@ -16,6 +25,9 @@ class ApiKey(BaseModel):
     hmac_secret = Column(String(512), nullable=True)  # Encrypted at rest
     last_used_at = Column(DateTime(timezone=True), nullable=True)
     active = Column(Boolean, default=True, nullable=False, index=True)
+    role = Column(
+        SQLEnum(ApiKeyRole), nullable=False, default=ApiKeyRole.ADMIN
+    )  # RBAC placeholder
 
     organization = relationship("Organization", backref="api_keys")
 

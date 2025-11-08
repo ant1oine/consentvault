@@ -23,3 +23,11 @@ class OrganizationResponse(BaseModel):
         from_attributes = True
 
 
+class OrganizationCreateResponse(BaseModel):
+    """Organization creation response with API key and HMAC secret."""
+
+    organization: OrganizationResponse
+    api_key: str  # Plaintext - shown only once
+    hmac_secret: str  # Plaintext - shown only once
+
+

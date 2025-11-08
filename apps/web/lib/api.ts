@@ -101,9 +101,33 @@ export interface AuditLogResponse {
   created_at: string
 }
 
+export interface Organization {
+  id: number
+  name: string
+  data_region: string
+  created_at: string
+}
+
+export interface OrgCreate {
+  name: string
+  data_region: string
+}
+
+export interface CreateOrgResponse {
+  organization: Organization
+  api_key: string
+  hmac_secret: string
+}
+
 function getApiKey(): string | null {
   if (typeof window === 'undefined') return null
   return localStorage.getItem('consentvault_api_key')
+}
+
+function getSelectedOrgId(): number | null {
+  if (typeof window === 'undefined') return null
+  const stored = localStorage.getItem('selectedOrgId')
+  return stored ? parseInt(stored, 10) : null
 }
 
 async function fetchWithAuth(
@@ -116,10 +140,16 @@ async function fetchWithAuth(
     throw new Error('API key not found. Please configure it in settings.')
   }
 
-  const headers = {
+  const headers: Record<string, string> = {
     'X-API-Key': apiKey,
     'Content-Type': 'application/json',
     ...options.headers,
+  }
+
+  // Add organization ID header if selected
+  const orgId = getSelectedOrgId()
+  if (orgId) {
+    headers['X-Organization-ID'] = orgId.toString()
   }
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -258,5 +288,19 @@ export async function deleteWebhook(id: number): Promise<void> {
     const error: ApiError = await response.json().catch(() => ({ detail: 'Unknown error' }))
     throw new Error(error.detail || `HTTP ${response.status}`)
   }
+}
+
+// Organizations
+export async function getOrganizations(): Promise<Organization[]> {
+  const response = await fetchWithAuth('/v1/admin/organizations')
+  return response.json()
+}
+
+export async function createOrganization(data: OrgCreate): Promise<CreateOrgResponse> {
+  const response = await fetchWithAuth('/v1/admin/organizations', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+  return response.json()
 }
 

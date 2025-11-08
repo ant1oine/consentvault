@@ -12,6 +12,7 @@ import {
   Clock,
   Webhook,
   Lock,
+  Building2,
 } from 'lucide-react'
 
 const navigation = [
@@ -19,6 +20,7 @@ const navigation = [
   { name: 'Consents', href: '/consents', icon: FileCheck },
   { name: 'Data Rights', href: '/rights', icon: Shield },
   { name: 'Audit Logs', href: '/audit', icon: FileText },
+  { name: 'Organizations', href: '/organizations', icon: Building2, admin: true },
   { name: 'Purposes', href: '/purposes', icon: Target, admin: true },
   { name: 'Retention Policies', href: '/policies', icon: Clock, admin: true },
   { name: 'Webhooks', href: '/webhooks', icon: Webhook, admin: true },

@@ -9,6 +9,10 @@ class DataRegion(str, enum.Enum):
 
     KSA = "KSA"
     UAE = "UAE"
+    QATAR = "Qatar"
+    BAHRAIN = "Bahrain"
+    OMAN = "Oman"
+    KUWAIT = "Kuwait"
 
 
 class OrganizationStatus(str, enum.Enum):

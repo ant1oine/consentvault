@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from apps.api.app.core.config import settings
-from apps.api.app.routers import health, auth_admin, consents, rights, webhooks, audit
+from apps.api.app.routers import health, auth_admin, consents, rights, webhooks, audit, organizations
 from apps.api.app.db.base import Base
 from apps.api.app.db.session import engine
 
@@ -78,6 +78,7 @@ app.include_router(consents.router)
 app.include_router(rights.router)
 app.include_router(webhooks.router)
 app.include_router(audit.router)
+app.include_router(organizations.router)
 
 
 @app.get("/")
