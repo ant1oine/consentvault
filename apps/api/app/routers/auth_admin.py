@@ -4,6 +4,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import and_
 
 from apps.api.app.db.session import get_db
 from apps.api.app.deps.auth import verify_api_key_auth
@@ -135,6 +136,32 @@ async def list_webhooks(
     webhook_service = WebhookService(db)
     endpoints = webhook_service.list_endpoints(org.id)
     return endpoints
+
+
+@router.delete("/webhooks/{webhook_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_webhook(
+    webhook_id: int,
+    db: Session = Depends(get_db),
+    auth: tuple[ApiKey, Organization] = Depends(verify_api_key_auth),
+):
+    """Delete a webhook endpoint (admin only)."""
+    api_key, org = auth
+    webhook_service = WebhookService(db)
+    endpoint = (
+        db.query(WebhookEndpoint)
+        .filter(
+            and_(
+                WebhookEndpoint.id == webhook_id,
+                WebhookEndpoint.organization_id == org.id,
+            )
+        )
+        .first()
+    )
+    if not endpoint:
+        raise HTTPException(status_code=404, detail="Webhook not found")
+    db.delete(endpoint)
+    db.commit()
+    return None
 
 
 @router.post("/policies", response_model=PolicyResponse, status_code=status.HTTP_201_CREATED)

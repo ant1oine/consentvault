@@ -84,6 +84,35 @@ async def get_latest_consent(
     return response_dict
 
 
+@router.get("", response_model=List[ConsentResponse])
+async def list_consents(
+    limit: int = Query(100, le=1000),
+    offset: int = Query(0, ge=0),
+    request: Request = None,
+    db: Session = Depends(get_db),
+    auth: tuple[ApiKey, Organization] = Depends(verify_api_key_auth),
+):
+    """List consent aggregates."""
+    api_key, org = auth
+
+    # Rate limit
+    await rate_limiter.check_rate_limit(str(api_key.id), request)
+
+    consent_service = ConsentService(db)
+    aggregates = consent_service.list_aggregates(org.id, limit=limit, offset=offset)
+    
+    # Get purpose codes for each aggregate
+    from apps.api.app.models.purpose import Purpose
+    results = []
+    for aggregate in aggregates:
+        purpose = db.query(Purpose).filter(Purpose.id == aggregate.purpose_id).first()
+        response_dict = aggregate.to_dict()
+        response_dict["purpose_code"] = purpose.code if purpose else None
+        results.append(response_dict)
+    
+    return results
+
+
 @router.get("/events", response_model=List[ConsentEventResponse])
 async def list_consent_events(
     since: Optional[datetime] = Query(None),

@@ -18,15 +18,25 @@ def main():
     """Create organization and API key."""
     db = SessionLocal()
     try:
-        # Create organization
-        org = Organization(
-            name="Default Organization",
-            data_region=DataRegion.KSA,
-            status=OrganizationStatus.ACTIVE,
-        )
-        db.add(org)
-        db.commit()
-        db.refresh(org)
+        # Check if organization already exists
+        org = db.query(Organization).filter(
+            Organization.name == "Default Organization"
+        ).first()
+        
+        if org:
+            print(f"Organization '{org.name}' already exists (ID: {org.id})")
+            print("Creating new API key for existing organization...")
+        else:
+            # Create organization
+            org = Organization(
+                name="Default Organization",
+                data_region=DataRegion.KSA,
+                status=OrganizationStatus.ACTIVE,
+            )
+            db.add(org)
+            db.commit()
+            db.refresh(org)
+            print(f"Created new organization: {org.name} (ID: {org.id})")
 
         # Generate API key
         plaintext_key = f"cv_{secrets.token_urlsafe(32)}"
@@ -47,14 +57,15 @@ def main():
         db.add(api_key)
         db.commit()
 
+        print()
         print("=" * 60)
-        print("Organization and API Key Created")
+        print("API Key Created")
         print("=" * 60)
         print(f"Organization ID: {org.id}")
         print(f"Organization Name: {org.name}")
         print(f"Data Region: {org.data_region.value}")
         print()
-        print("API Key (save this - shown only once):")
+        print("⚠️  API Key (save this - shown only once):")
         print(f"  {plaintext_key}")
         print()
         print("HMAC Secret (for request signing):")

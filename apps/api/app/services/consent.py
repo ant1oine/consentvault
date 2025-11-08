@@ -224,6 +224,18 @@ class ConsentService:
         )
         return aggregate
 
+    def list_aggregates(
+        self,
+        organization_id: int,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[ConsentAggregate]:
+        """List consent aggregates for organization."""
+        query = self.db.query(ConsentAggregate).filter(
+            ConsentAggregate.organization_id == organization_id
+        )
+        return query.order_by(ConsentAggregate.last_event_at.desc()).limit(limit).offset(offset).all()
+
     def list_events(
         self,
         organization_id: int,
