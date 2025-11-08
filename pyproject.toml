@@ -96,4 +96,6 @@ python_classes = "Test*"
 python_functions = "test_*"
 addopts = "-v --strict-markers"
 
+[tool.setuptools.packages.find]
+include = ["apps", "apps.*"]
 
