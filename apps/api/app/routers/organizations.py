@@ -4,6 +4,7 @@ from typing import List
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Request
+from fastapi_limiter.depends import RateLimiter
 from sqlalchemy.orm import Session
 
 from apps.api.app.db.session import get_db
@@ -21,7 +22,11 @@ from apps.api.app.services.audit import AuditService
 from apps.api.app.utils.ids import generate_ulid
 from apps.api.app.utils.hashing import compute_audit_hash
 
-router = APIRouter(prefix="/v1/admin/organizations", tags=["admin"])
+router = APIRouter(
+    prefix="/v1/admin/organizations",
+    tags=["admin"],
+    dependencies=[Depends(RateLimiter(times=60, seconds=60))],
+)
 
 
 def create_organization_with_key(

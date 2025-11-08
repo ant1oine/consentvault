@@ -1,6 +1,7 @@
 """Users router for admin management."""
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Request, Header
+from fastapi_limiter.depends import RateLimiter
 from sqlalchemy.orm import Session
 
 from apps.api.app.db.session import get_db
@@ -14,7 +15,11 @@ from apps.api.app.schemas.user import (
 from apps.api.app.services.user import UserService
 from apps.api.app.core.authz import get_organization_id, require_role
 
-router = APIRouter(prefix="/v1/admin/users", tags=["admin"])
+router = APIRouter(
+    prefix="/v1/admin/users",
+    tags=["admin"],
+    dependencies=[Depends(RateLimiter(times=60, seconds=60))],
+)
 
 
 @router.get("", response_model=List[UserResponse])

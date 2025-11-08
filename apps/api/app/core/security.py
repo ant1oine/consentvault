@@ -2,10 +2,13 @@
 import base64
 import hashlib
 import hmac
+import os
 import time
-from typing import Optional
+from datetime import datetime, timedelta
+from typing import Optional, Dict, Any
 
 from cryptography.fernet import Fernet
+from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
@@ -81,4 +84,53 @@ def generate_hmac_signature(body: bytes, timestamp: str, secret: str) -> str:
     """Generate HMAC-SHA256 signature for webhook delivery."""
     message = body + timestamp.encode()
     return hmac.new(secret.encode(), message, hashlib.sha256).hexdigest()
+
+
+# JWT Token Functions
+# JWT settings - in production, use a strong secret from environment
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
+JWT_ALGORITHM = "HS256"
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+
+def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+    """
+    Create a JWT access token.
+    
+    Args:
+        data: Dictionary containing claims (e.g., {"sub": user_id, "email": email})
+        expires_delta: Optional expiration time delta
+        
+    Returns:
+        Encoded JWT token string
+    """
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    to_encode.update({"exp": expire, "iat": datetime.utcnow()})
+    encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    return encoded_jwt
+
+
+def verify_token(token: str) -> Dict[str, Any]:
+    """
+    Verify and decode a JWT token.
+    
+    Args:
+        token: JWT token string
+        
+    Returns:
+        Decoded token payload
+        
+    Raises:
+        JWTError: If token is invalid or expired
+    """
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        return payload
+    except JWTError:
+        raise
 

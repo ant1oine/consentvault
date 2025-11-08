@@ -3,6 +3,7 @@ import secrets
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi_limiter.depends import RateLimiter
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
@@ -22,7 +23,11 @@ from apps.api.app.core.config import settings
 from apps.api.app.services.webhook import WebhookService
 from apps.api.app.services.policy import PolicyService
 
-router = APIRouter(prefix="/v1/admin", tags=["admin"])
+router = APIRouter(
+    prefix="/v1/admin",
+    tags=["admin"],
+    dependencies=[Depends(RateLimiter(times=60, seconds=60))],
+)
 
 
 def generate_api_key() -> str:

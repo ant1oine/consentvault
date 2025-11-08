@@ -87,3 +87,36 @@ def require_role(required_role: str):
 
     return role_checker
 
+
+# JWT-based user authentication
+# Import from auth router (no circular dependency since auth router doesn't import this module)
+# This allows other routers to use: from apps.api.app.deps.auth import get_current_user
+# Note: This will be available after the auth router module is loaded
+try:
+    from apps.api.app.routers.auth import get_current_user_from_token
+    
+    # Alias for convenience (matches user's request)
+    # This is the same function, just with a shorter name for convenience
+    get_current_user = get_current_user_from_token
+except ImportError:
+    # Fallback if auth router not yet loaded - will raise error when used
+    def get_current_user(*args, **kwargs):
+        """
+        Get current authenticated user from JWT token.
+        
+        This is an alias for get_current_user_from_token from the auth router.
+        Verifies token, checks blacklist, and returns User object.
+        
+        Usage:
+            from apps.api.app.deps.auth import get_current_user
+            from apps.api.app.models.user import User
+            
+            @router.get("/protected")
+            def protected_route(current_user: User = Depends(get_current_user)):
+                ...
+        """
+        raise ImportError(
+            "Auth router not available. "
+            "Import get_current_user_from_token directly from apps.api.app.routers.auth"
+        )
+

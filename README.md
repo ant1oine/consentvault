@@ -2,6 +2,14 @@
 
 Production-grade consent management API for GCC builders. Handles consent logging, withdrawals, data-rights requests, and audit evidence.
 
+## Environments
+
+ConsentVault supports three deployment environments:
+
+1. **Local**: Docker Compose for development
+2. **Staging**: Docker Compose for pre-production testing
+3. **Production**: AWS ECS Fargate in me-central-1 (Riyadh) for PDPL compliance
+
 ## Quick Start
 
 ### Prerequisites
@@ -136,12 +144,279 @@ if not verify_webhook_signature(body, signature, timestamp, webhook_secret):
 
 - **API Key Authentication**: Argon2 hashed keys, shown plaintext only once
 - **HMAC Verification**: Optional request signing with clock-skew protection (5 min)
-- **Rate Limiting**: Redis token bucket per API key (default: 60 req/min)
+- **Rate Limiting**: Redis-based rate limiting via fastapi-limiter (60 req/min per IP on admin routes)
 - **Tenant Isolation**: Row-level scoping by organization_id
 - **Audit Hash Chain**: Tamper-evident audit log with SHA-256 chain
 - **Field Encryption**: Optional Fernet encryption for sensitive fields
-- **Security Headers**: X-Content-Type-Options, X-Frame-Options, etc.
+- **Security Headers**: X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy
+- **HTTPS Redirect**: Automatic redirect in staging/production environments
+- **Trusted Host**: Host validation middleware
 - **Body Size Limits**: Configurable (default: 1MB)
+
+## Production Launch
+
+### Staging Deployment
+
+1. **Configure environment variables:**
+   ```bash
+   cd docker
+   # Copy the example file and edit with your values:
+   cp env/.env.staging.example env/.env.staging
+   # Edit env/.env.staging with your values:
+   # - ALLOWED_HOSTS: your staging domain
+   # - CORS_ORIGINS: your frontend URL
+   # - POSTGRES_PASSWORD: strong password
+   # - MASTER_ENCRYPTION_KEY: 32-byte base64 key (use generate_key.py)
+   ```
+
+2. **Quick reset and deploy (recommended):**
+   ```bash
+   # From project root
+   ./scripts/devops_reset_staging.sh
+   ```
+   
+   This script will:
+   - Stop and remove existing containers and volumes
+   - Rebuild and start all services
+   - Run database migrations
+   - Verify health endpoint
+
+3. **Manual deployment (alternative):**
+   ```bash
+   # Build and start staging
+   docker compose -f docker/docker-compose.staging.yml up -d --build
+   
+   # Run migrations
+   docker compose -f docker/docker-compose.staging.yml exec api alembic upgrade head
+   
+   # Verify deployment
+   curl http://localhost/healthz
+   ```
+
+4. **Verify deployment:**
+   ```bash
+   # Health check
+   curl http://localhost/healthz
+   
+   # Metrics endpoint
+   curl http://localhost/metrics | head -n 20
+   ```
+
+**Troubleshooting:**
+
+If you see `"POSTGRES_PASSWORD variable is not set"`, `"db unhealthy"`, or `"password authentication failed for user 'consentvault'"`:
+
+1. **Verify `.env.staging` exists and has correct values:**
+   ```bash
+   cat docker/env/.env.staging
+   ```
+   
+   Ensure it contains:
+   ```ini
+   POSTGRES_USER=consentvault
+   POSTGRES_PASSWORD=supersecretpassword
+   POSTGRES_DB=consentvault
+   DATABASE_URL=postgresql+psycopg://consentvault:supersecretpassword@db:5432/consentvault
+   ```
+   
+   **Important:** The password in `DATABASE_URL` must match `POSTGRES_PASSWORD`.
+
+2. **Check that `docker-compose.staging.yml` includes `env_file` for both services:**
+   ```yaml
+   services:
+     db:
+       env_file:
+         - ./env/.env.staging
+       environment:
+         POSTGRES_USER: ${POSTGRES_USER}
+         POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+         POSTGRES_DB: ${POSTGRES_DB}
+     
+     api:
+       env_file:
+         - ./env/.env.staging
+   ```
+
+3. **Use the reset script which includes `--env-file` flag:**
+   ```bash
+   ./scripts/devops_reset_staging.sh
+   ```
+   
+   The script uses `--env-file docker/env/.env.staging` to ensure Docker Compose loads variables for substitution.
+
+4. **Verify environment variables are loaded in containers:**
+   ```bash
+   # Check api container
+   docker compose -f docker/docker-compose.staging.yml exec api env | grep -E "(POSTGRES|DATABASE_URL)"
+   
+   # Check db container
+   docker compose -f docker/docker-compose.staging.yml exec db env | grep POSTGRES
+   ```
+   
+   They should match exactly.
+
+5. **If issues persist, check container logs:**
+   ```bash
+   docker compose -f docker/docker-compose.staging.yml logs db
+   docker compose -f docker/docker-compose.staging.yml logs api
+   ```
+
+### Production Deployment (AWS Riyadh / PDPL)
+
+Production infrastructure is deployed to AWS in the `me-central-1` (Riyadh) region for PDPL compliance. All resources (compute, storage, logs, backups) remain in KSA.
+
+**Architecture:**
+- **ECS Fargate**: API tasks in private subnets
+- **RDS PostgreSQL**: Multi-AZ, encrypted at rest
+- **ElastiCache Redis**: Multi-AZ, TLS required
+- **ALB**: Application Load Balancer with ACM certificate
+- **Secrets Manager**: Encrypted secrets (KMS)
+- **CloudWatch Logs**: Centralized logging in me-central-1
+
+**Prerequisites:**
+1. AWS account with access to me-central-1
+2. Route 53 hosted zone for your domain
+3. Terraform >= 1.5.0
+4. GitHub repository configured with OIDC
+
+**Initial Deployment:**
+
+1. **Deploy Infrastructure:**
+   ```bash
+   cd infra/terraform
+   terraform init
+   terraform apply -var="domain_name=yourdomain.sa"
+   ```
+
+2. **Push Docker Image:**
+   ```bash
+   # Login to ECR
+   aws ecr get-login-password --region me-central-1 | \
+     docker login --username AWS --password-stdin \
+     $(terraform output -raw ecr_repository_url | cut -d'/' -f1)
+   
+   # Build and push
+   docker build -f api.Dockerfile.prod -t consentvault/api:latest .
+   docker tag consentvault/api:latest $(terraform output -raw ecr_repository_url):latest
+   docker push $(terraform output -raw ecr_repository_url):latest
+   ```
+
+3. **Update ECS Service:**
+   ```bash
+   aws ecs update-service \
+     --cluster consentvault-prod \
+     --service consentvault-prod-api-service \
+     --force-new-deployment \
+     --region me-central-1
+   ```
+
+4. **Run Migrations:**
+   Migrations are automatically run by the CI/CD pipeline. To run manually:
+   ```bash
+   # Get VPC info
+   VPC_ID=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=consentvault-prod-vpc" --region me-central-1 --query 'Vpcs[0].VpcId' --output text)
+   SUBNETS=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$VPC_ID" "Name=tag:Type,Values=private" --region me-central-1 --query 'Subnets[*].SubnetId' --output text | tr '\t' ',')
+   SG=$(aws ec2 describe-security-groups --filters "Name=tag:Name,Values=consentvault-prod-api-sg" --region me-central-1 --query 'SecurityGroups[0].GroupId' --output text)
+   
+   # Run migration task
+   aws ecs run-task \
+     --cluster consentvault-prod \
+     --task-definition consentvault-prod-api \
+     --launch-type FARGATE \
+     --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SG],assignPublicIp=DISABLED}" \
+     --overrides '{"containerOverrides":[{"name":"api","command":["alembic","upgrade","head"]}]}' \
+     --region me-central-1
+   ```
+
+**CI/CD Deployment:**
+
+The GitHub Actions workflow (`.github/workflows/prod.yml`) automates:
+1. Building and pushing Docker images to ECR
+2. Deploying infrastructure changes (Terraform)
+3. Updating ECS service with new image
+4. Running database migrations
+5. Smoke tests
+
+**Trigger deployment:**
+- Push a tag starting with `v*` (e.g., `v1.0.0`)
+- Or manually trigger from GitHub Actions UI
+
+**Required GitHub Secrets:**
+- `AWS_ROLE_ARN`: IAM role ARN for GitHub Actions (from Terraform output)
+- `AWS_ACCOUNT_ID`: Your AWS account ID
+- `AWS_REGION`: `me-central-1`
+- `PROD_DOMAIN`: Your domain (e.g., `yourdomain.sa`)
+- `PROD_SUBDOMAIN`: `api`
+
+**Secrets Management:**
+
+All secrets are stored in AWS Secrets Manager:
+- `consentvault/prod/app-secrets`: DATABASE_URL, REDIS_URL, MASTER_ENCRYPTION_KEY, etc.
+- `consentvault/prod/db-password`: RDS password
+- `consentvault/prod/redis-password`: Redis auth token
+
+ECS tasks automatically inject secrets as environment variables.
+
+**Monitoring:**
+
+- **CloudWatch Logs**: `/ecs/consentvault-prod-api` (90 day retention)
+- **ECS Service**: Monitor task health via AWS Console
+- **ALB**: Health checks on `/healthz` endpoint
+- **RDS/Redis**: CloudWatch metrics
+
+**PDPL Compliance:**
+
+✅ All resources in `me-central-1` (Riyadh)  
+✅ No cross-border data transfer  
+✅ Encryption at rest (KMS) and in transit (TLS)  
+✅ All logs and backups remain in KSA  
+✅ No global services or cross-region endpoints  
+
+**For detailed infrastructure documentation, see [`infra/terraform/README.md`](infra/terraform/README.md)**
+
+### HTTPS Setup
+
+The staging/production compose files include Nginx as a reverse proxy. For HTTPS:
+
+- **Option 1**: Use Cloudflare or similar CDN in front (recommended)
+- **Option 2**: Add Caddy or certbot to the Nginx container
+- **Option 3**: Use a load balancer with TLS termination
+
+Update `docker/nginx/nginx.staging.conf` and `docker/nginx/nginx.prod.conf` to add SSL configuration when ready.
+
+## Observability
+
+### Metrics
+
+Prometheus metrics are exposed at `/metrics`:
+
+```bash
+curl http://localhost:8000/metrics
+```
+
+Key metrics include:
+- HTTP request counts by method, status code, and endpoint
+- Request duration histograms
+- Active connections
+
+### Logging
+
+Structured JSON logs via `structlog`:
+
+```bash
+# View logs
+docker compose -f docker/docker-compose.staging.yml logs -f api
+```
+
+Logs are JSON-formatted for easy ingestion into log aggregation systems (Datadog, ELK, etc.).
+
+### Health Checks
+
+The `/healthz` endpoint checks:
+- Database connectivity
+- Redis connectivity
+
+Returns `200` if healthy, `503` if degraded.
 
 ## Data Model
 

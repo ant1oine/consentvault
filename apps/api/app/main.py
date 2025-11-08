@@ -1,12 +1,36 @@
 """Main FastAPI application."""
+import os
+
+import structlog
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from apps.api.app.core.config import settings
-from apps.api.app.routers import health, auth_admin, consents, rights, webhooks, audit, organizations, users
+from apps.api.app.core.errors_handlers import forbidden_handler, generic_handler
+from apps.api.app.core.errors import ForbiddenError
+from apps.api.app.core.logging import configure_logging
+from apps.api.app.core.ratelimit import init_rate_limit
+from apps.api.app.routers import (
+    health,
+    auth,
+    auth_admin,
+    consents,
+    rights,
+    webhooks,
+    audit,
+    organizations,
+    users,
+)
 from apps.api.app.db.base import Base
 from apps.api.app.db.session import engine
+
+# Configure structured logging
+configure_logging()
+log = structlog.get_logger()
 
 # Create tables (in production, use migrations)
 # Base.metadata.create_all(bind=engine)
@@ -18,6 +42,9 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+# Prometheus metrics
+Instrumentator(should_group_status_codes=True).instrument(app).expose(app, endpoint="/metrics")
 
 
 # Security headers middleware
@@ -55,11 +82,26 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
         return response
 
 
+# Environment-based middleware
+ENV = os.getenv("ENV", "development")
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+
+# HTTPS redirect for staging/production
+if ENV in ("staging", "production"):
+    app.add_middleware(HTTPSRedirectMiddleware)
+
+# Trusted host middleware
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=[h.strip() for h in ALLOWED_HOSTS if h.strip()],
+)
+
 # CORS middleware
-if settings.allowed_origins_list:
+cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+if cors_origins:
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.allowed_origins_list,
+        allow_origins=[origin.strip() for origin in cors_origins if origin.strip()],
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["*"],
@@ -71,8 +113,13 @@ app.add_middleware(SecurityHeadersMiddleware)
 # Body size limit
 app.add_middleware(BodySizeLimitMiddleware)
 
+# Error handlers
+app.add_exception_handler(ForbiddenError, forbidden_handler)
+app.add_exception_handler(Exception, generic_handler)
+
 # Include routers
 app.include_router(health.router)
+app.include_router(auth.router)
 app.include_router(auth_admin.router)
 app.include_router(consents.router)
 app.include_router(rights.router)
@@ -82,6 +129,13 @@ app.include_router(organizations.router)
 app.include_router(users.router)
 
 
+@app.on_event("startup")
+async def startup():
+    """Initialize services on startup."""
+    await init_rate_limit(app)
+    log.info("application_started", env=ENV)
+
+
 @app.get("/")
 async def root():
     """Root endpoint."""
@@ -89,5 +143,50 @@ async def root():
         "name": "ConsentVault API",
         "version": "0.1.0",
         "docs": "/docs",
+    }
+
+
+@app.get("/debug/env")
+async def debug_env():
+    """
+    Debug endpoint to show environment variables (local/dev only).
+    
+    Masks sensitive values like passwords and keys.
+    """
+    if ENV not in ("development", "local"):
+        from fastapi import HTTPException, status
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This endpoint is only available in development/local environments"
+        )
+    
+    import os
+    from typing import Dict
+    
+    # List of sensitive keys to mask
+    sensitive_keys = {
+        "password", "secret", "key", "token", "credential", "hmac", "encryption"
+    }
+    
+    env_vars: Dict[str, str] = {}
+    for key, value in os.environ.items():
+        key_lower = key.lower()
+        # Mask sensitive values
+        if any(sensitive in key_lower for sensitive in sensitive_keys):
+            if value:
+                # Show first 4 and last 4 chars, mask the middle
+                if len(value) > 8:
+                    env_vars[key] = f"{value[:4]}...{value[-4:]}"
+                else:
+                    env_vars[key] = "***"
+            else:
+                env_vars[key] = ""
+        else:
+            env_vars[key] = value
+    
+    return {
+        "environment": ENV,
+        "variables": env_vars,
+        "note": "Sensitive values are masked. This endpoint is only available in development/local."
     }
 
