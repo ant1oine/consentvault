@@ -1,5 +1,6 @@
 """Organization schemas."""
-from pydantic import BaseModel, Field
+from datetime import datetime
+from pydantic import BaseModel, Field, ConfigDict
 
 from apps.api.app.models.organization import DataRegion
 
@@ -18,10 +19,10 @@ class OrganizationResponse(BaseModel):
     name: str
     data_region: DataRegion
     status: str
-    created_at: str
+    created_at: datetime
 
-    class Config:
-        from_attributes = True
+    # Enable ORM serialization (replaces Config.orm_mode=True)
+    model_config = ConfigDict(from_attributes=True)
 
 
 class OrganizationCreateResponse(BaseModel):
@@ -30,5 +31,3 @@ class OrganizationCreateResponse(BaseModel):
     organization: OrganizationResponse
     api_key: str  # Plaintext - shown only once
     hmac_secret: str  # Plaintext - shown only once
-
-

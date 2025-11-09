@@ -1,35 +1,36 @@
 """API Key schemas."""
+from typing import Optional
 from datetime import datetime
-
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict
 
 
 class ApiKeyCreate(BaseModel):
-    """Create API key schema."""
-
-    name: str = Field(..., min_length=1, max_length=255)
-
-
-class ApiKeyResponse(BaseModel):
-    """API key response schema (masked)."""
-
-    id: int
-    organization_id: int
+    """
+    Payload for creating a new API key.
+    - `name`: display name for the key
+    - `organization_id`: optional (only SUPERADMIN can specify another org)
+    """
     name: str
-    last_used_at: datetime | None
-    active: bool
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
+    organization_id: Optional[int] = None  # SUPERADMIN override
 
 
 class ApiKeyCreateResponse(BaseModel):
-    """API key creation response with plaintext key (shown once)."""
-
+    """Response after creating an API key (shows plaintext key once)."""
     id: int
     name: str
-    api_key: str  # Plaintext - shown only once
+    api_key: str
     created_at: datetime
 
+    model_config = ConfigDict(from_attributes=True)
 
+
+class ApiKeyResponse(BaseModel):
+    """Full API key details (for list views)."""
+    id: int
+    organization_id: int
+    name: str
+    last_used_at: Optional[datetime] = None
+    active: bool
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

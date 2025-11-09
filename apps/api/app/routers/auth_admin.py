@@ -1,6 +1,5 @@
-"""Admin authentication router (API keys, webhooks, purposes, policies)."""
+"""Admin router — manages organizations, API keys, webhooks, purposes, and policies."""
 import secrets
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
@@ -10,11 +9,12 @@ from apps.api.app.core.ratelimit import optional_rate_limit
 from apps.api.app.core.security import encrypt_field, hash_api_key
 from apps.api.app.db.session import get_db
 from apps.api.app.deps.auth import verify_api_key_auth
-from apps.api.app.models.api_key import ApiKey
+from apps.api.app.models.api_key import ApiKey, ApiKeyRole
 from apps.api.app.models.organization import Organization
 from apps.api.app.models.purpose import Purpose
 from apps.api.app.models.webhook import WebhookEndpoint
 from apps.api.app.schemas.api_key import ApiKeyCreate, ApiKeyCreateResponse, ApiKeyResponse
+from apps.api.app.schemas.organization import OrganizationResponse
 from apps.api.app.schemas.policy import PolicyCreate, PolicyResponse
 from apps.api.app.schemas.purpose import PurposeCreate, PurposeResponse
 from apps.api.app.schemas.webhook import WebhookEndpointCreate, WebhookEndpointResponse
@@ -27,36 +27,98 @@ router = APIRouter(
     dependencies=[optional_rate_limit(times=60, seconds=60)],
 )
 
-
+# ------------------------------------------------------------
+# Helper
+# ------------------------------------------------------------
 def generate_api_key() -> str:
     """Generate a new API key."""
     return f"cv_{secrets.token_urlsafe(32)}"
 
 
-@router.post("/api-keys", response_model=ApiKeyCreateResponse, status_code=status.HTTP_201_CREATED)
+# ------------------------------------------------------------
+# ORGANIZATIONS
+# ------------------------------------------------------------
+@router.get("/organizations", response_model=list[OrganizationResponse])
+async def list_organizations(
+    db: Session = Depends(get_db),
+    auth: tuple[ApiKey, Organization] = Depends(verify_api_key_auth),
+):
+    """
+    List organizations.
+    - SUPERADMIN: sees all organizations
+    - Others: sees only their own organization
+    """
+    api_key, org = auth
+    if api_key.role == ApiKeyRole.SUPERADMIN:
+        return db.query(Organization).all()
+    return [org]
+
+
+@router.post(
+    "/organizations",
+    response_model=OrganizationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_organization(
+    data: dict,
+    db: Session = Depends(get_db),
+    auth: tuple[ApiKey, Organization] = Depends(verify_api_key_auth),
+):
+    """Create a new organization (SUPERADMIN only)."""
+    api_key, org = auth
+
+    if api_key.role != ApiKeyRole.SUPERADMIN:
+        raise HTTPException(status_code=403, detail="Only superadmins can create organizations")
+
+    new_org = Organization(
+        name=data["name"],
+        data_region=data["data_region"],
+        status="active",
+    )
+    db.add(new_org)
+    db.commit()
+    db.refresh(new_org)
+    return new_org
+
+
+# ------------------------------------------------------------
+# API KEYS
+# ------------------------------------------------------------
+@router.post(
+    "/api-keys",
+    response_model=ApiKeyCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_api_key(
     data: ApiKeyCreate,
     db: Session = Depends(get_db),
     auth: tuple[ApiKey, Organization] = Depends(verify_api_key_auth),
 ):
-    """Create a new API key (admin only)."""
+    """
+    Create a new API key.
+    - SUPERADMIN: can create keys for any organization (via organization_id)
+    - ADMIN: can create keys only for their own organization
+    """
     api_key, org = auth
-    # For now, all authenticated keys can create API keys
-    # In future, check RBAC role == "admin"
 
-    # Generate key
+    target_org_id = getattr(data, "organization_id", org.id)
+    if api_key.role != ApiKeyRole.SUPERADMIN and target_org_id != org.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Not authorized to create API key for another organization",
+        )
+
     plaintext_key = generate_api_key()
     hashed_key = hash_api_key(plaintext_key)
-
-    # Generate HMAC secret
     hmac_secret = secrets.token_urlsafe(32)
     encrypted_hmac_secret = encrypt_field(hmac_secret, settings.master_encryption_key)
 
     db_key = ApiKey(
-        organization_id=org.id,
+        organization_id=target_org_id,
         name=data.name,
         hashed_key=hashed_key,
         hmac_secret=encrypted_hmac_secret,
+        role=ApiKeyRole.ADMIN,
         active=True,
     )
     db.add(db_key)
@@ -66,7 +128,7 @@ async def create_api_key(
     return ApiKeyCreateResponse(
         id=db_key.id,
         name=db_key.name,
-        api_key=plaintext_key,  # Show only once
+        api_key=plaintext_key,
         created_at=db_key.created_at,
     )
 
@@ -76,12 +138,14 @@ async def list_api_keys(
     db: Session = Depends(get_db),
     auth: tuple[ApiKey, Organization] = Depends(verify_api_key_auth),
 ):
-    """List API keys (admin only)."""
+    """List API keys for the current organization."""
     api_key, org = auth
-    keys = db.query(ApiKey).filter(ApiKey.organization_id == org.id).all()
-    return keys
+    return db.query(ApiKey).filter(ApiKey.organization_id == org.id).all()
 
 
+# ------------------------------------------------------------
+# PURPOSES
+# ------------------------------------------------------------
 @router.post("/purposes", response_model=PurposeResponse, status_code=status.HTTP_201_CREATED)
 async def create_purpose(
     data: PurposeCreate,
@@ -110,13 +174,13 @@ async def list_purposes(
 ):
     """List purposes (admin only)."""
     api_key, org = auth
-    purposes = db.query(Purpose).filter(Purpose.organization_id == org.id).all()
-    return purposes
+    return db.query(Purpose).filter(Purpose.organization_id == org.id).all()
 
 
-@router.post(
-    "/webhooks", response_model=WebhookEndpointResponse, status_code=status.HTTP_201_CREATED
-)
+# ------------------------------------------------------------
+# WEBHOOKS
+# ------------------------------------------------------------
+@router.post("/webhooks", response_model=WebhookEndpointResponse, status_code=status.HTTP_201_CREATED)
 async def create_webhook(
     data: WebhookEndpointCreate,
     db: Session = Depends(get_db),
@@ -124,9 +188,8 @@ async def create_webhook(
 ):
     """Create a webhook endpoint (admin only)."""
     api_key, org = auth
-    webhook_service = WebhookService(db)
-    endpoint = webhook_service.create_endpoint(org.id, data.url, data.secret)
-    return endpoint
+    service = WebhookService(db)
+    return service.create_endpoint(org.id, data.url, data.secret)
 
 
 @router.get("/webhooks", response_model=list[WebhookEndpointResponse])
@@ -136,9 +199,8 @@ async def list_webhooks(
 ):
     """List webhook endpoints (admin only)."""
     api_key, org = auth
-    webhook_service = WebhookService(db)
-    endpoints = webhook_service.list_endpoints(org.id)
-    return endpoints
+    service = WebhookService(db)
+    return service.list_endpoints(org.id)
 
 
 @router.delete("/webhooks/{webhook_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -149,15 +211,9 @@ async def delete_webhook(
 ):
     """Delete a webhook endpoint (admin only)."""
     api_key, org = auth
-    WebhookService(db)
     endpoint = (
         db.query(WebhookEndpoint)
-        .filter(
-            and_(
-                WebhookEndpoint.id == webhook_id,
-                WebhookEndpoint.organization_id == org.id,
-            )
-        )
+        .filter(and_(WebhookEndpoint.id == webhook_id, WebhookEndpoint.organization_id == org.id))
         .first()
     )
     if not endpoint:
@@ -167,6 +223,9 @@ async def delete_webhook(
     return None
 
 
+# ------------------------------------------------------------
+# POLICIES
+# ------------------------------------------------------------
 @router.post("/policies", response_model=PolicyResponse, status_code=status.HTTP_201_CREATED)
 async def create_policy(
     data: PolicyCreate,
@@ -175,9 +234,8 @@ async def create_policy(
 ):
     """Create or update a retention policy (admin only)."""
     api_key, org = auth
-    policy_service = PolicyService(db)
-    policy = policy_service.upsert_policy(org.id, data.purpose_id, data.retention_days, data.active)
-    return policy
+    service = PolicyService(db)
+    return service.upsert_policy(org.id, data.purpose_id, data.retention_days, data.active)
 
 
 @router.get("/policies", response_model=list[PolicyResponse])
@@ -187,7 +245,5 @@ async def list_policies(
 ):
     """List retention policies (admin only)."""
     api_key, org = auth
-    policy_service = PolicyService(db)
-    policies = policy_service.list_policies(org.id)
-    return policies
-
+    service = PolicyService(db)
+    return service.list_policies(org.id)

@@ -9,11 +9,12 @@ from apps.api.app.db.base import BaseModel
 
 
 class ApiKeyRole(str, enum.Enum):
-    """API Key role enum (for future RBAC)."""
+    """API Key role enum (for RBAC)."""
 
-    ADMIN = "admin"
-    AUDITOR = "auditor"
-    VIEWER = "viewer"
+    SUPERADMIN = "SUPERADMIN"  # platform-level operator
+    ADMIN = "ADMIN"            # organization-level manager
+    AUDITOR = "AUDITOR"        # read-only access
+    VIEWER = "VIEWER"          # limited dashboard access
 
 
 class ApiKey(BaseModel):
@@ -28,9 +29,9 @@ class ApiKey(BaseModel):
     last_used_at = Column(DateTime(timezone=True), nullable=True)
     active = Column(Boolean, default=True, nullable=False, index=True)
     role = Column(
-        SQLEnum(ApiKeyRole), nullable=False, default=ApiKeyRole.ADMIN
-    )  # RBAC placeholder
+        SQLEnum(ApiKeyRole, name="apikeyrole"),
+        nullable=False,
+        default=ApiKeyRole.ADMIN,
+    )
 
     organization = relationship("Organization", backref="api_keys")
-
-
