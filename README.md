@@ -6,6 +6,7 @@ ConsentVault is a trust and compliance layer for organizations that need to prov
 - Centralizes consent, withdrawal, and data-rights workflows with tamper-evident audit trails.
 - Exposes a real-time API plus a modern admin dashboard for compliance, CX, and product teams.
 - Emits deterministic webhooks so downstream systems stay in sync with the consent ledger.
+- Provides regulator-grade audit logging with cryptographic integrity verification for every API call.
 - Provides opinionated rate limiting, key management, and encryption defaults out of the box.
 
 ## Why It Exists
@@ -37,6 +38,7 @@ The business overview ends here. Technical collaborators can dive into the `docs
 - [Running ConsentVault](docs/running.md) – environment setup for local, staging, and production.
 - [Makefile Guide](docs/makefile.md) – how automation targets map to day-to-day tasks.
 - [Organization & Access Management](docs/organizations.md) – creating orgs, API keys, and admins.
+- [Audit Logging & Verification](docs/audit_logging.md) – cryptographic audit trail and verification endpoints.
 - [Runbook](docs/runbook.md) – operational procedures for on-call engineers.
 
 Questions or partnerships? Reach out to the ConsentVault team and we’ll walk you through the roadmap.

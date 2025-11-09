@@ -86,6 +86,45 @@ def require_role(required_role: str):
     return role_checker
 
 
+async def extract_auth_context(request: Request) -> dict | None:
+    """
+    Extract organization_id and api_key_id for audit logging.
+    
+    This is a lightweight version that doesn't require full authentication,
+    used by middleware to identify the API key and organization.
+    
+    Returns:
+        Dict with 'api_key_id' and 'org_id' if found, None otherwise
+    """
+    try:
+        from apps.api.app.db.session import SessionLocal
+        from apps.api.app.models.api_key import ApiKey
+        from apps.api.app.core.security import verify_api_key
+
+        # Get API key from header
+        api_key_str = request.headers.get("X-Api-Key")
+        if not api_key_str:
+            return None
+
+        db = SessionLocal()
+        try:
+            # Find API key by checking hash against all active keys
+            api_keys = db.query(ApiKey).filter(ApiKey.active).all()
+            
+            for key in api_keys:
+                if verify_api_key(api_key_str, key.hashed_key):
+                    return {
+                        "api_key_id": key.id,
+                        "org_id": key.organization_id
+                    }
+        finally:
+            db.close()
+        
+        return None
+    except Exception:
+        return None
+
+
 # JWT-based user authentication
 # Import from auth router (no circular dependency since auth router doesn't import this module)
 # This allows other routers to use: from apps.api.app.deps.auth import get_current_user
