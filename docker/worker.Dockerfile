@@ -15,6 +15,6 @@ RUN pip install --no-cache-dir psycopg[binary] alembic argon2-cffi
 
 COPY . .
 
-CMD ["rq", "worker", "--url", "redis://redis:6379/0", "consentvault"]
+CMD ["rq", "worker", "--url", "redis://redis:6379/0", "consentvault", "audit"]
 
 

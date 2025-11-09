@@ -21,8 +21,10 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { motion } from 'framer-motion'
+import { usePageAnalytics } from '@/lib/analytics'
 
 export default function ConsentsPage() {
+  usePageAnalytics('consents')
   const { data: consents, isLoading } = useQuery({
     queryKey: queryKeys.consents({ limit: 100 }),
     queryFn: () => getConsents({ limit: 100 }),

@@ -28,10 +28,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useState } from 'react'
 import { queryKeys } from '@/lib/queryKeys'
+import ProtectedRoute from '@/components/layout/ProtectedRoute'
+import { usePageAnalytics } from '@/lib/analytics'
 
 const DATA_REGIONS = ['KSA', 'UAE', 'Qatar', 'Bahrain', 'Oman', 'Kuwait']
 
-export default function OrganizationsPage() {
+function OrganizationsTable() {
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [successDialogOpen, setSuccessDialogOpen] = useState(false)
   const [createdOrgData, setCreatedOrgData] = useState<CreateOrgResponse | null>(null)
@@ -280,5 +282,14 @@ export default function OrganizationsPage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+export default function OrganizationsPage() {
+  usePageAnalytics('organizations')
+  return (
+    <ProtectedRoute requiredRole="SUPERADMIN">
+      <OrganizationsTable />
+    </ProtectedRoute>
   )
 }

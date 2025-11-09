@@ -1,4 +1,5 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+export const API_URL = API_BASE_URL
 
 export interface ApiError {
   detail: string
@@ -101,6 +102,22 @@ export interface AuditLogResponse {
   created_at: string
 }
 
+export interface AdminAuditLogResponse {
+  id: number
+  organization_id: number
+  api_key_id: number
+  method: string
+  path: string
+  status_code: number
+  ip_address: string | null
+  request_hash: string | null
+  response_hash: string | null
+  request_body: string | null
+  created_at: string
+  verified_at: string | null
+  verifier_api_key_id: number | null
+}
+
 export interface Organization {
   id: number
   name: string
@@ -121,46 +138,97 @@ export interface CreateOrgResponse {
 
 function getApiKey(): string | null {
   if (typeof window === 'undefined') return null
-  return localStorage.getItem('consentvault_api_key')
+  return localStorage.getItem('cv_api_key')
 }
 
-function getSelectedOrgId(): number | null {
+function getSelectedOrg(): { id: number; name: string } | null {
   if (typeof window === 'undefined') return null
-  const stored = localStorage.getItem('selectedOrgId')
-  return stored ? parseInt(stored, 10) : null
+  const stored = localStorage.getItem('cv_org')
+  if (!stored) return null
+  try {
+    return JSON.parse(stored)
+  } catch {
+    return null
+  }
 }
 
 async function fetchWithAuth(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  skipOrgHeader: boolean = false
 ): Promise<Response> {
-  const apiKey = getApiKey()
-  
+  const apiKey = typeof window !== 'undefined' ? localStorage.getItem('cv_api_key') : null
+  const org = typeof window !== 'undefined' ? localStorage.getItem('cv_org') : null
+
   if (!apiKey) {
-    throw new Error('API key not found. Please configure it in settings.')
+    // Redirect to login if no API key
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login'
+    }
+    throw new Error('Missing API key')
   }
 
-  const headers = new Headers(options.headers ?? {})
-  headers.set('X-API-Key', apiKey)
-  headers.set('Content-Type', 'application/json')
-
-  // Add organization ID header if selected
-  const orgId = getSelectedOrgId()
-  if (orgId) {
-    headers.set('X-Organization-ID', orgId.toString())
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    'X-Api-Key': apiKey,
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  if (org && !skipOrgHeader) {
+    try {
+      const orgData = JSON.parse(org)
+      if (orgData?.id) {
+        headers['X-Organization-ID'] = orgData.id.toString()
+      }
+    } catch {
+      // Invalid org data, skip header
+    }
+  }
+
+  const res = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
     headers,
   })
 
-  if (!response.ok) {
-    const error: ApiError = await response.json().catch(() => ({ detail: 'Unknown error' }))
-    throw new Error(error.detail || `HTTP ${response.status}`)
+  if (res.status === 401) {
+    if (typeof window !== 'undefined') {
+      localStorage.clear()
+      window.location.href = '/login'
+    }
+    throw new Error('Unauthorized')
   }
 
-  return response
+  if (res.status === 403) {
+    throw new Error('Forbidden')
+  }
+
+  if (!res.ok) {
+    const error: ApiError = await res.json().catch(() => ({ detail: 'Unknown error' }))
+    throw new Error(error.detail || `HTTP ${res.status}`)
+  }
+
+  return res
+}
+
+/**
+ * Check if backend is reachable by attempting to fetch the health endpoint.
+ * Returns true if backend is reachable, false otherwise.
+ */
+export async function checkBackendConnection(): Promise<boolean> {
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 3000) // 3 second timeout
+
+    const response = await fetch(`${API_BASE_URL}/healthz`, {
+      method: 'GET',
+      signal: controller.signal,
+    })
+
+    clearTimeout(timeoutId)
+    return response.ok
+  } catch (error) {
+    // Network error, timeout, or other failure
+    return false
+  }
 }
 
 // Purposes
@@ -264,6 +332,12 @@ export async function getAuditLogs(params?: {
   return response.json()
 }
 
+// Admin Audit (API audit logs)
+export async function getAdminAuditLogs(limit = 100): Promise<AdminAuditLogResponse[]> {
+  const response = await fetchWithAuth(`/v1/admin/audit/?limit=${limit}`)
+  return response.json()
+}
+
 // Webhooks
 export async function getWebhooks(): Promise<WebhookEndpointResponse[]> {
   const response = await fetchWithAuth('/v1/admin/webhooks')
@@ -291,6 +365,12 @@ export async function deleteWebhook(id: number): Promise<void> {
 // Organizations
 export async function getOrganizations(): Promise<Organization[]> {
   const response = await fetchWithAuth('/v1/admin/organizations')
+  return response.json()
+}
+
+// Get all organizations (for superadmins, without org context)
+export async function getAllOrganizations(): Promise<Organization[]> {
+  const response = await fetchWithAuth('/v1/admin/organizations', {}, true)
   return response.json()
 }
 
@@ -354,5 +434,60 @@ export async function toggleUserActive(id: string, data: UserToggleActive): Prom
     method: 'POST',
     body: JSON.stringify(data),
   })
+  return response.json()
+}
+
+// Get current user (API key) info
+export type CurrentUser = {
+  id: string
+  role: 'SUPERADMIN' | 'ADMIN' | 'AUDITOR' | 'VIEWER'
+  organization_id: number | null
+}
+
+export async function getCurrentUser(): Promise<CurrentUser> {
+  const response = await fetchWithAuth('/v1/admin/users/me')
+  return response.json()
+}
+
+// Audit Metrics
+export interface AuditMetrics {
+  totals: { events: number; organizations: number; api_keys: number }
+  last_24h: { events: number; by_status: { '2xx': number; '4xx': number; '5xx': number } }
+  verification: { verified: number; unverified: number; rate: number }
+  top_endpoints: { path: string; count: number }[]
+  recent_unsigned_exports_7d: number
+}
+
+export interface AuditTimeseries {
+  window: '24h' | '7d' | '30d'
+  bucket: 'hour' | 'day'
+  series: Array<{ ts: string; events: number; s2xx: number; s4xx: number; s5xx: number }>
+}
+
+export async function getAuditMetrics(orgId?: number): Promise<AuditMetrics> {
+  const params = new URLSearchParams()
+  if (orgId) params.set('organization_id', String(orgId))
+  // skipOrgHeader = true when viewing all orgs (orgId not provided) or when explicitly filtering by orgId
+  // Both cases mean we're controlling org scope via query param, not header
+  const response = await fetchWithAuth(`/v1/admin/audit/metrics?${params.toString()}`, {
+    method: 'GET',
+  }, true) // Always skip org header - use query param for org filtering
+  return response.json()
+}
+
+export async function getAuditTimeseries(options?: {
+  orgId?: number
+  window?: '24h' | '7d' | '30d'
+  bucket?: 'hour' | 'day'
+}): Promise<AuditTimeseries> {
+  const params = new URLSearchParams()
+  if (options?.orgId) params.set('organization_id', String(options.orgId))
+  params.set('window', options?.window ?? '24h')
+  params.set('bucket', options?.bucket ?? 'hour')
+  // skipOrgHeader = true when viewing all orgs (orgId not provided) or when explicitly filtering by orgId
+  // Both cases mean we're controlling org scope via query param, not header
+  const response = await fetchWithAuth(`/v1/admin/audit/timeseries?${params.toString()}`, {
+    method: 'GET',
+  }, true) // Always skip org header - use query param for org filtering
   return response.json()
 }

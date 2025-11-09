@@ -29,17 +29,26 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useState } from 'react'
 import { queryKeys } from '@/lib/queryKeys'
+import ProtectedRoute from '@/components/layout/ProtectedRoute'
+import { usePageAnalytics } from '@/lib/analytics'
 
-export default function PoliciesPage() {
+function PoliciesTable() {
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [selectedPolicy, setSelectedPolicy] = useState<number | null>(null)
   const [retentionDays, setRetentionDays] = useState('')
   const [purposeId, setPurposeId] = useState('')
   const queryClient = useQueryClient()
 
-  const { data: policies, isLoading } = useQuery({
+  const { data: policies, isLoading, error } = useQuery({
     queryKey: queryKeys.policies(),
     queryFn: () => getPolicies(),
+    retry: (failureCount, error) => {
+      // Don't retry on FORBIDDEN errors
+      if (error instanceof Error && error.message === 'FORBIDDEN') {
+        return false
+      }
+      return failureCount < 3
+    },
   })
 
   const { data: purposes } = useQuery({
@@ -124,6 +133,21 @@ export default function PoliciesPage() {
                 {[...Array(5)].map((_, i) => (
                   <Skeleton key={i} className="h-12 w-full" />
                 ))}
+              </div>
+            ) : error ? (
+              <div className="py-8 text-center">
+                {error instanceof Error && error.message === 'FORBIDDEN' ? (
+                  <>
+                    <p className="text-destructive mb-2 font-semibold">
+                      Insufficient Permissions
+                    </p>
+                    <p className="text-muted-foreground">
+                      Your role does not allow access to this section. Required role: ADMIN
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-destructive">Failed to load policies</p>
+                )}
               </div>
             ) : !policies || policies.length === 0 ? (
               <div className="py-8 text-center text-muted-foreground">
@@ -233,5 +257,14 @@ export default function PoliciesPage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+export default function PoliciesPage() {
+  usePageAnalytics('policies')
+  return (
+    <ProtectedRoute requiredRole="ADMIN">
+      <PoliciesTable />
+    </ProtectedRoute>
   )
 }

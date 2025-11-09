@@ -78,7 +78,7 @@ stack-up:
 
 web-dev: $(WEB_DEPS_STAMP)
 	@echo "🌐 Starting Next.js dev server (Ctrl+C to stop; backend stays up)..."
-	cd $(WEB_DIR) && $(PNPM) dev
+	cd $(WEB_DIR) && $(PNPM) dev || (echo "❌ Frontend failed to start"; exit 1)
 
 up: stack-up
 	@$(MAKE) wait-db

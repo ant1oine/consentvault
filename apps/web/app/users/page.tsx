@@ -21,8 +21,10 @@ import { useState } from 'react'
 import { Select } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { queryKeys } from '@/lib/queryKeys'
+import ProtectedRoute from '@/components/layout/ProtectedRoute'
+import { usePageAnalytics } from '@/lib/analytics'
 
-export default function UsersPage() {
+function UsersTable() {
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null)
   const queryClient = useQueryClient()
@@ -30,6 +32,13 @@ export default function UsersPage() {
   const { data: users, isLoading, error } = useQuery({
     queryKey: queryKeys.users(),
     queryFn: () => getUsers(),
+    retry: (failureCount, error) => {
+      // Don't retry on FORBIDDEN errors
+      if (error instanceof Error && error.message === 'FORBIDDEN') {
+        return false
+      }
+      return failureCount < 3
+    },
   })
 
   const updateRoleMutation = useMutation({
@@ -112,15 +121,28 @@ export default function UsersPage() {
               </div>
             ) : error ? (
               <div className="py-8 text-center">
-                <p className="text-destructive mb-4">Failed to load users</p>
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    queryClient.invalidateQueries({ queryKey: queryKeys.users() })
-                  }
-                >
-                  Retry
-                </Button>
+                {error instanceof Error && error.message === 'FORBIDDEN' ? (
+                  <>
+                    <p className="text-destructive mb-2 font-semibold">
+                      Insufficient Permissions
+                    </p>
+                    <p className="text-muted-foreground mb-4">
+                      Your role does not allow access to this section. Required role: AUDITOR
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-destructive mb-4">Failed to load users</p>
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        queryClient.invalidateQueries({ queryKey: queryKeys.users() })
+                      }
+                    >
+                      Retry
+                    </Button>
+                  </>
+                )}
               </div>
             ) : !users || users.length === 0 ? (
               <div className="py-8 text-center text-muted-foreground">
@@ -211,5 +233,14 @@ export default function UsersPage() {
 
       <AddUserDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} />
     </div>
+  )
+}
+
+export default function UsersPage() {
+  usePageAnalytics('users')
+  return (
+    <ProtectedRoute requiredRole="AUDITOR">
+      <UsersTable />
+    </ProtectedRoute>
   )
 }

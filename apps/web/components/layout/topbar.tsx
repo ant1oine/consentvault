@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Settings, Lock, LogOut } from 'lucide-react'
+import { Settings, LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -27,47 +27,38 @@ import {
   getAuditLogs,
 } from '@/lib/api'
 import { queryKeys } from '@/lib/queryKeys'
-
-const STORAGE_KEY = 'consentvault_api_key'
-const ORG_KEY = 'selectedOrgId'
+import { useAuth } from '@/components/providers/AuthContext'
+import { OrgSwitcher } from '@/components/layout/OrgSwitcher'
 
 export function TopBar() {
-  const [apiKey, setApiKey] = useState<string>('')
+  const { apiKey, org, setApiKey, setOrg, logout, isSuperAdmin, role } = useAuth()
+  const [apiKeyInput, setApiKeyInput] = useState<string>('')
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [hasApiKey, setHasApiKey] = useState(false)
-  const [selectedOrgId, setSelectedOrgId] = useState<number | null>(null)
   const queryClient = useQueryClient()
   const lastPrefetchedOrg = useRef<number | null>(null)
 
   const { data: organizations } = useQuery({
     queryKey: queryKeys.organizations(),
     queryFn: () => getOrganizations(),
-    enabled: hasApiKey,
+    enabled: !!apiKey,
     retry: false,
   })
 
+  // Initialize API key input from context
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    const stored = localStorage.getItem(STORAGE_KEY)
-    setHasApiKey(!!stored)
-    if (stored) {
-      setApiKey(stored)
+    if (apiKey) {
+      setApiKeyInput(apiKey)
     }
-    const storedOrg = localStorage.getItem(ORG_KEY)
-    if (storedOrg) {
-      setSelectedOrgId(parseInt(storedOrg, 10))
-    }
-  }, [])
+  }, [apiKey])
 
+  // Auto-select first organization if none selected (only for non-superadmins)
   useEffect(() => {
-    if (organizations && organizations.length > 0 && !selectedOrgId) {
-      const firstOrgId = organizations[0].id
-      setSelectedOrgId(firstOrgId)
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(ORG_KEY, firstOrgId.toString())
-      }
+    if (isSuperAdmin) return // Superadmins can stay without org selected
+    if (organizations && organizations.length > 0 && !org) {
+      const firstOrg = organizations[0]
+      setOrg({ id: firstOrg.id, name: firstOrg.name })
     }
-  }, [organizations, selectedOrgId])
+  }, [organizations, org, setOrg, isSuperAdmin])
 
   const invalidateOrgScopedQueries = () => {
     const scopedKeys = [
@@ -86,47 +77,45 @@ export function TopBar() {
   }
 
   const handleOrgChange = (orgId: number) => {
-    setSelectedOrgId(orgId)
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(ORG_KEY, orgId.toString())
+    const selectedOrg = organizations?.find((o) => o.id === orgId)
+    if (selectedOrg) {
+      setOrg({ id: selectedOrg.id, name: selectedOrg.name })
+      invalidateOrgScopedQueries()
+      toast.success('Organization switched')
     }
-    invalidateOrgScopedQueries()
-    toast.success('Organization switched')
   }
 
   const handleSaveApiKey = () => {
-    if (!apiKey.trim()) {
+    if (!apiKeyInput.trim()) {
       toast.error('Please enter an API key')
       return
     }
-    localStorage.setItem(STORAGE_KEY, apiKey)
-    setHasApiKey(true)
+    setApiKey(apiKeyInput)
     setSettingsOpen(false)
     toast.success('API key saved successfully')
     queryClient.clear()
+    // Reload to refresh all queries with new key
     window.location.reload()
   }
 
   const handleLogout = () => {
-    localStorage.removeItem(STORAGE_KEY)
-    localStorage.removeItem(ORG_KEY)
-    setApiKey('')
-    setHasApiKey(false)
-    setSettingsOpen(false)
-    setSelectedOrgId(null)
+    logout()
     queryClient.clear()
     toast.success('Signed out')
-    window.location.reload()
   }
 
   useEffect(() => {
-    if (!hasApiKey || !selectedOrgId) {
+    // Skip prefetching for superadmins without org selected
+    if (isSuperAdmin && !org?.id) {
       return
     }
-    if (lastPrefetchedOrg.current === selectedOrgId) {
+    if (!apiKey || !org?.id) {
       return
     }
-    lastPrefetchedOrg.current = selectedOrgId
+    if (lastPrefetchedOrg.current === org.id) {
+      return
+    }
+    lastPrefetchedOrg.current = org.id
 
     void queryClient.prefetchQuery({
       queryKey: queryKeys.consents({ limit: 100 }),
@@ -166,36 +155,50 @@ export function TopBar() {
         getAuditLogs({ limit: 50, offset: pageParam }),
       initialPageParam: 0,
     })
-  }, [hasApiKey, selectedOrgId, queryClient])
+  }, [apiKey, org?.id, queryClient])
 
   return (
     <>
       <div className="flex h-16 items-center justify-between border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-6">
         <div className="flex items-center gap-4">
-          <span className="text-sm text-muted-foreground">Organization</span>
-          <select
-            className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-            value={selectedOrgId || ''}
-            onChange={(e) => {
-              const orgId = parseInt(e.target.value, 10)
-              if (!isNaN(orgId)) {
-                handleOrgChange(orgId)
-              }
-            }}
-            disabled={!organizations || organizations.length === 0}
-          >
-            {!organizations || organizations.length === 0 ? (
-              <option>No organizations</option>
-            ) : (
-              organizations.map((org: Organization) => (
-                <option key={org.id} value={org.id}>
-                  {org.name}
-                </option>
-              ))
-            )}
-          </select>
+          {isSuperAdmin ? (
+            <OrgSwitcher />
+          ) : (
+            <>
+              <span className="text-sm text-muted-foreground">Organization</span>
+              <select
+                className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                value={org?.id || ''}
+                onChange={(e) => {
+                  const orgId = parseInt(e.target.value, 10)
+                  if (!isNaN(orgId)) {
+                    handleOrgChange(orgId)
+                  }
+                }}
+                disabled={!organizations || organizations.length === 0}
+              >
+                {!organizations || organizations.length === 0 ? (
+                  <option>No organizations</option>
+                ) : (
+                  organizations.map((organization: Organization) => (
+                    <option key={organization.id} value={organization.id}>
+                      {organization.name}
+                    </option>
+                  ))
+                )}
+              </select>
+            </>
+          )}
         </div>
         <div className="flex items-center gap-3">
+          {org && (
+            <span className="text-sm text-muted-foreground">{org.name}</span>
+          )}
+          {apiKey && (
+            <span className="text-xs text-muted-foreground ml-2 uppercase">
+              ({role || 'VIEWER'})
+            </span>
+          )}
           <Button
             variant="ghost"
             size="icon"
@@ -203,7 +206,7 @@ export function TopBar() {
           >
             <Settings className="h-5 w-5" />
           </Button>
-          {hasApiKey && (
+          {apiKey && (
             <Button variant="outline" size="sm" onClick={handleLogout}>
               <LogOut className="h-4 w-4 mr-2" />
               Log out
@@ -227,15 +230,15 @@ export function TopBar() {
                 id="api-key"
                 type="password"
                 placeholder="cv_..."
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
+                value={apiKeyInput}
+                onChange={(e) => setApiKeyInput(e.target.value)}
               />
             </div>
             <div className="flex gap-2">
               <Button onClick={handleSaveApiKey} className="flex-1">
                 Save
               </Button>
-              {hasApiKey && (
+              {apiKey && (
                 <Button
                   variant="outline"
                   onClick={handleLogout}
@@ -253,54 +256,3 @@ export function TopBar() {
   )
 }
 
-export function LockScreen() {
-  const [apiKey, setApiKey] = useState<string>('')
-
-  const handleSaveApiKey = () => {
-    if (!apiKey.trim()) {
-      toast.error('Please enter an API key')
-      return
-    }
-    localStorage.setItem(STORAGE_KEY, apiKey)
-    toast.success('API key saved successfully')
-    window.location.reload()
-  }
-
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background to-muted/20">
-      <div className="glass-card w-full max-w-md space-y-6 p-8">
-        <div className="flex items-center justify-center">
-          <Lock className="h-12 w-12 text-primary" />
-        </div>
-        <div className="space-y-2 text-center">
-          <h1 className="font-display text-2xl font-semibold">
-            ConsentVault Admin
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Please enter your API key to continue
-          </p>
-        </div>
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="lock-api-key">API Key</Label>
-            <Input
-              id="lock-api-key"
-              type="password"
-              placeholder="cv_..."
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleSaveApiKey()
-                }
-              }}
-            />
-          </div>
-          <Button onClick={handleSaveApiKey} className="w-full">
-            Continue
-          </Button>
-        </div>
-      </div>
-    </div>
-  )
-}

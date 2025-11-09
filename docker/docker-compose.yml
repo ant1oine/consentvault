@@ -35,22 +35,24 @@ services:
       retries: 3
       start_period: 10s
 
-  # Worker service - commented out for minimal local setup
-  # Uncomment if you need background job processing
-  # worker:
-  #   build:
-  #     context: ..
-  #     dockerfile: docker/worker.Dockerfile
-  #   container_name: consentvault-worker
-  #   volumes:
-  #     - ../:/app
-  #   depends_on:
-  #     redis:
-  #       condition: service_healthy
-  #     db:
-  #       condition: service_healthy
-  #   command: rq worker --url redis://redis:6379/0
-  #   restart: unless-stopped
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/worker.Dockerfile
+    container_name: consentvault-worker
+    volumes:
+      - ../:/app
+    environment:
+      ENV: development
+      DATABASE_URL: postgresql+psycopg://consentvault:consentvault@db:5432/consentvault
+      REDIS_URL: redis://redis:6379/0
+      MASTER_ENCRYPTION_KEY: "n8PLSoEOM5UEmRKbCTmnbwcsdLsfhufMD9kV3QuBn4c="
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    restart: unless-stopped
 
   db:
     image: postgres:16

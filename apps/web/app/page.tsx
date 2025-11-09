@@ -8,6 +8,8 @@ import { queryKeys } from '@/lib/queryKeys'
 import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { FileCheck, XCircle, Shield, Target } from 'lucide-react'
+import { useAuth } from '@/components/providers/AuthContext'
+import { usePageAnalytics } from '@/lib/analytics'
 
 function AnimatedCounter({ value }: { value: number }) {
   return (
@@ -23,19 +25,25 @@ function AnimatedCounter({ value }: { value: number }) {
 }
 
 export default function DashboardPage() {
+  usePageAnalytics('dashboard')
+  const { apiKey, org } = useAuth()
+
   const { data: consents, isLoading: consentsLoading } = useQuery({
     queryKey: queryKeys.consents({ limit: 1000 }),
     queryFn: () => getConsents({ limit: 1000 }),
+    enabled: !!apiKey,
   })
 
   const { data: rights, isLoading: rightsLoading } = useQuery({
     queryKey: queryKeys.rights(),
     queryFn: () => getRights(),
+    enabled: !!apiKey,
   })
 
   const { data: purposes, isLoading: purposesLoading } = useQuery({
     queryKey: queryKeys.purposes(),
     queryFn: () => getPurposes(),
+    enabled: !!apiKey,
   })
 
   const stats = useMemo(() => {
@@ -89,6 +97,12 @@ export default function DashboardPage() {
         <p className="text-muted-foreground mt-2">
           Overview of your consent management system
         </p>
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mt-4 p-4 bg-muted rounded-lg text-sm">
+            <p>API Key: {apiKey ? apiKey.slice(0, 8) + '...' : 'Not logged in'}</p>
+            <p>Org: {org ? org.name : 'None'}</p>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">

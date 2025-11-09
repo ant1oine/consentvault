@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:web": "next dev --turbo --port 3000",
     "build": "next build",
     "start": "next start",
     "lint": "eslint --max-warnings=0 ."
@@ -18,7 +19,8 @@
     "lucide-react": "^0.427.0",
     "clsx": "^2.1.1",
     "tailwind-merge": "^2.5.2",
-    "class-variance-authority": "^0.7.0"
+    "class-variance-authority": "^0.7.0",
+    "recharts": "^2.12.7"
   },
   "devDependencies": {
     "@types/node": "^20.14.12",

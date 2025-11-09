@@ -17,6 +17,7 @@ from apps.api.app.middleware.audit_log import AuditLogMiddleware
 from apps.api.app.routers import (
     audit,
     audit_admin,
+    audit_metrics,
     audit_verify,   # ✅ newly added router
     auth,
     auth_admin,
@@ -153,6 +154,7 @@ app.include_router(rights.router)
 app.include_router(webhooks.router)
 app.include_router(audit.router)
 app.include_router(audit_admin.router)
+app.include_router(audit_metrics.router)
 app.include_router(audit_verify.router)  # ✅ new verifier route
 app.include_router(organizations.router)
 app.include_router(users.router)

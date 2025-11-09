@@ -29,16 +29,25 @@ import { Label } from '@/components/ui/label'
 import { useState } from 'react'
 import { queryKeys } from '@/lib/queryKeys'
 import { Textarea } from '@/components/ui/textarea'
+import ProtectedRoute from '@/components/layout/ProtectedRoute'
+import { usePageAnalytics } from '@/lib/analytics'
 
-export default function PurposesPage() {
+function PurposesTable() {
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [code, setCode] = useState('')
   const [description, setDescription] = useState('')
   const queryClient = useQueryClient()
 
-  const { data: purposes, isLoading } = useQuery({
+  const { data: purposes, isLoading, error } = useQuery({
     queryKey: queryKeys.purposes(),
     queryFn: () => getPurposes(),
+    retry: (failureCount, error) => {
+      // Don't retry on FORBIDDEN errors
+      if (error instanceof Error && error.message === 'FORBIDDEN') {
+        return false
+      }
+      return failureCount < 3
+    },
   })
 
   const createMutation = useMutation({
@@ -105,6 +114,21 @@ export default function PurposesPage() {
                 {[...Array(5)].map((_, i) => (
                   <Skeleton key={i} className="h-12 w-full" />
                 ))}
+              </div>
+            ) : error ? (
+              <div className="py-8 text-center">
+                {error instanceof Error && error.message === 'FORBIDDEN' ? (
+                  <>
+                    <p className="text-destructive mb-2 font-semibold">
+                      Insufficient Permissions
+                    </p>
+                    <p className="text-muted-foreground">
+                      Your role does not allow access to this section. Required role: ADMIN
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-destructive">Failed to load purposes</p>
+                )}
               </div>
             ) : !purposes || purposes.length === 0 ? (
               <div className="py-8 text-center text-muted-foreground">
@@ -202,5 +226,14 @@ export default function PurposesPage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+export default function PurposesPage() {
+  usePageAnalytics('purposes')
+  return (
+    <ProtectedRoute requiredRole="ADMIN">
+      <PurposesTable />
+    </ProtectedRoute>
   )
 }

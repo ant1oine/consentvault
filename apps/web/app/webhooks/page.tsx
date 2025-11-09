@@ -28,16 +28,25 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useState } from 'react'
 import { queryKeys } from '@/lib/queryKeys'
+import ProtectedRoute from '@/components/layout/ProtectedRoute'
+import { usePageAnalytics } from '@/lib/analytics'
 
-export default function WebhooksPage() {
+function WebhooksTable() {
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [url, setUrl] = useState('')
   const [secret, setSecret] = useState('')
   const queryClient = useQueryClient()
 
-  const { data: webhooks, isLoading } = useQuery({
+  const { data: webhooks, isLoading, error } = useQuery({
     queryKey: queryKeys.webhooks(),
     queryFn: () => getWebhooks(),
+    retry: (failureCount, error) => {
+      // Don't retry on FORBIDDEN errors
+      if (error instanceof Error && error.message === 'FORBIDDEN') {
+        return false
+      }
+      return failureCount < 3
+    },
   })
 
   const createMutation = useMutation({
@@ -121,6 +130,21 @@ export default function WebhooksPage() {
                 {[...Array(5)].map((_, i) => (
                   <Skeleton key={i} className="h-12 w-full" />
                 ))}
+              </div>
+            ) : error ? (
+              <div className="py-8 text-center">
+                {error instanceof Error && error.message === 'FORBIDDEN' ? (
+                  <>
+                    <p className="text-destructive mb-2 font-semibold">
+                      Insufficient Permissions
+                    </p>
+                    <p className="text-muted-foreground">
+                      Your role does not allow access to this section. Required role: ADMIN
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-destructive">Failed to load webhooks</p>
+                )}
               </div>
             ) : !webhooks || webhooks.length === 0 ? (
               <div className="py-8 text-center text-muted-foreground">
@@ -224,5 +248,14 @@ export default function WebhooksPage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+export default function WebhooksPage() {
+  usePageAnalytics('webhooks')
+  return (
+    <ProtectedRoute requiredRole="ADMIN">
+      <WebhooksTable />
+    </ProtectedRoute>
   )
 }

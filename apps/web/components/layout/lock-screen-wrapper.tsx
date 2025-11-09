@@ -1,25 +1,29 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { LockScreen } from './topbar'
+import { useEffect } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
+import { useAuth } from '@/components/providers/AuthContext'
 
 export function LockScreenWrapper({ children }: { children: React.ReactNode }) {
-  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null)
+  const { apiKey } = useAuth()
+  const router = useRouter()
+  const pathname = usePathname()
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('consentvault_api_key')
-      setHasApiKey(!!stored)
+    // Don't redirect if already on login page
+    if (pathname === '/login') {
+      return
     }
-  }, [])
 
-  if (hasApiKey === null) {
-    // Still checking
+    // Redirect to login if no API key
+    if (!apiKey) {
+      router.push('/login')
+    }
+  }, [apiKey, router, pathname])
+
+  // Don't render children if on login page or no API key
+  if (pathname === '/login' || !apiKey) {
     return null
-  }
-
-  if (!hasApiKey) {
-    return <LockScreen />
   }
 
   return <>{children}</>

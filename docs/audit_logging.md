@@ -178,6 +178,111 @@ curl -X POST http://localhost:8000/v1/admin/audit/hash \
   -d '{"payload": {"foo": "bar"}}'
 ```
 
+### Export Audit Logs
+
+**GET** `/v1/admin/audit/export`
+
+Exports audit logs in CSV or JSON format for compliance reporting and archival.
+
+**Authentication**: Requires API key with SUPERADMIN role
+
+**Query Parameters**:
+- `format` (optional): Export format - `csv` or `json` (default: `csv`)
+
+**Response**: Streaming response with the export file
+
+**Example**:
+```bash
+# Export as CSV
+curl -X GET "http://localhost:8000/v1/admin/audit/export?format=csv" \
+  -H "X-Api-Key: cv_your_superadmin_key" \
+  -o audit_logs.csv
+
+# Export as JSON
+curl -X GET "http://localhost:8000/v1/admin/audit/export?format=json" \
+  -H "X-Api-Key: cv_your_superadmin_key" \
+  -o audit_logs.json
+```
+
+### Export Audit Logs with Cryptographic Signature
+
+**GET** `/v1/admin/audit/export/signed`
+
+Exports audit logs with a cryptographic signature for tamper-proof verification. Each export includes a detached `.sig` file generated using SHA-256 + Ed25519 digital signatures.
+
+**Authentication**: Requires API key with SUPERADMIN role
+
+**Query Parameters**:
+- `format` (optional): Export format - `csv` or `json` (default: `csv`)
+
+**Response**:
+```json
+{
+  "data": "base64-encoded-export-data",
+  "data_filename": "audit_logs_2025-01-15T120000.csv",
+  "signature": "base64-encoded-signature",
+  "signature_filename": "audit_logs_2025-01-15T120000.csv.sig",
+  "format": "csv",
+  "timestamp": "2025-01-15T120000"
+}
+```
+
+**Example**:
+```bash
+# Get signed export
+curl -X GET "http://localhost:8000/v1/admin/audit/export/signed?format=csv" \
+  -H "X-Api-Key: cv_your_superadmin_key" \
+  -o signed_export.json
+
+# Extract and save files
+cat signed_export.json | jq -r '.data' | base64 -d > audit_logs.csv
+cat signed_export.json | jq -r '.signature' > audit_logs.csv.sig
+```
+
+**Key Generation**:
+
+Before using signed exports, generate an Ed25519 keypair:
+
+```bash
+python scripts/gen_audit_keypair.py
+```
+
+This creates:
+- `keys/audit_private.key` - Private key (keep secure, store in backend container)
+- `keys/audit_public.key` - Public key (share with auditors for verification)
+
+**Signature Verification**:
+
+Auditors can verify exported files using the verification script:
+
+```bash
+python scripts/verify_audit_signature.py \
+  audit_logs_2025-01-15T120000.csv \
+  audit_logs_2025-01-15T120000.csv.sig \
+  keys/audit_public.key
+```
+
+Or programmatically:
+
+```python
+from nacl.signing import VerifyKey
+import base64, hashlib
+
+pub = open("keys/audit_public.key").read().strip()
+sig = open("audit_logs.csv.sig").read().strip()
+data = open("audit_logs.csv", "rb").read()
+
+vk = VerifyKey(base64.b64decode(pub))
+vk.verify(hashlib.sha256(data).digest(), base64.b64decode(sig))
+print("✅ Verified")
+```
+
+**Security Notes**:
+- The private key must be stored securely in the backend container (not committed to version control)
+- The public key can be safely shared with auditors and external parties
+- Each export is signed with a unique signature based on the file's SHA-256 digest
+- Tampering with the exported file will cause verification to fail
+
 ## Use Cases
 
 ### 1. Regulatory Compliance
@@ -246,8 +351,9 @@ curl -X GET http://localhost:8000/v1/admin/audit/ \
 ### ISO 27001
 
 - **A.12.4.1 - Event Logging**: Comprehensive logging of all API events
-- **A.12.4.2 - Log Protection**: Immutable, tamper-evident audit trail
+- **A.12.4.2 - Log Protection**: Immutable, tamper-evident audit trail with cryptographic signatures
 - **A.12.4.3 - Administrator and Operator Logs**: Tracks who performed verification
+- **A.12.4.3 - Integrity Verification**: Cryptographic signing of exported audit logs enables independent verification
 
 ## Database Schema
 

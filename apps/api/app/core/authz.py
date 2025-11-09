@@ -30,9 +30,11 @@ def get_organization_id(
 def require_role(min_role: Literal["ADMIN", "AUDITOR", "VIEWER"]):
     """
     Dependency factory for RBAC role checking.
-    Role hierarchy: ADMIN > AUDITOR > VIEWER
+    Role hierarchy: SUPERADMIN > ADMIN > AUDITOR > VIEWER
+    SUPERADMIN bypasses all role restrictions.
     """
     role_hierarchy = {
+        "SUPERADMIN": 4,
         "ADMIN": 3,
         "AUDITOR": 2,
         "VIEWER": 1,
@@ -45,12 +47,18 @@ def require_role(min_role: Literal["ADMIN", "AUDITOR", "VIEWER"]):
         api_key, _ = auth
 
         api_key_role_map = {
+            ApiKeyRole.SUPERADMIN: "SUPERADMIN",
             ApiKeyRole.ADMIN: "ADMIN",
             ApiKeyRole.AUDITOR: "AUDITOR",
             ApiKeyRole.VIEWER: "VIEWER",
         }
 
         current_role = api_key_role_map.get(api_key.role, "VIEWER")
+        
+        # SUPERADMIN bypasses all role restrictions
+        if current_role == "SUPERADMIN":
+            return api_key
+        
         current_level = role_hierarchy.get(current_role, 0)
         required_level = role_hierarchy.get(min_role, 0)
 

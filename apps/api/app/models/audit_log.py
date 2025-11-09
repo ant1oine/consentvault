@@ -1,7 +1,7 @@
 """Audit Log model — regulator-grade request/response integrity tracking."""
 from typing import Any
 
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
 from sqlalchemy.sql import func
 
 from apps.api.app.db.base import BaseModel
@@ -20,6 +20,7 @@ class ApiAuditLog(BaseModel):
     ip_address = Column(String(45), nullable=True)
     request_hash = Column(String(64), nullable=True)
     response_hash = Column(String(64), nullable=True)
+    request_body = Column(Text, nullable=True)  # JSON string for UI events and other payloads
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     verified_at = Column(DateTime(timezone=True), nullable=True)
     verifier_api_key_id = Column(Integer, ForeignKey("api_keys.id"), nullable=True)
@@ -36,6 +37,7 @@ class ApiAuditLog(BaseModel):
             "ip_address": self.ip_address,
             "request_hash": self.request_hash,
             "response_hash": self.response_hash,
+            "request_body": self.request_body,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "verified_at": self.verified_at.isoformat() if self.verified_at else None,
             "verifier_api_key_id": self.verifier_api_key_id,

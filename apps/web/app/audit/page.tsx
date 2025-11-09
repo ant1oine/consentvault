@@ -8,14 +8,17 @@ import { Lock } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useEffect, useRef } from 'react'
 import { queryKeys } from '@/lib/queryKeys'
+import ProtectedRoute from '@/components/layout/ProtectedRoute'
+import { usePageAnalytics } from '@/lib/analytics'
 
-export default function AuditPage() {
+function AuditLogsTable() {
   const {
     data,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
     isLoading,
+    error,
   } = useInfiniteQuery({
     queryKey: queryKeys.auditLogs(),
     queryFn: ({ pageParam = 0 }) =>
@@ -25,6 +28,13 @@ export default function AuditPage() {
       return allPages.length * 50
     },
     initialPageParam: 0,
+    retry: (failureCount, error) => {
+      // Don't retry on FORBIDDEN errors
+      if (error instanceof Error && error.message === 'FORBIDDEN') {
+        return false
+      }
+      return failureCount < 3
+    },
   })
 
   const observerTarget = useRef<HTMLDivElement>(null)
@@ -85,6 +95,21 @@ export default function AuditPage() {
                     <Skeleton key={i} className="h-16 w-full" />
                   ))}
                 </div>
+              ) : error ? (
+                <div className="py-8 text-center">
+                  {error instanceof Error && error.message === 'FORBIDDEN' ? (
+                    <>
+                      <p className="text-destructive mb-2 font-semibold">
+                        Insufficient Permissions
+                      </p>
+                      <p className="text-muted-foreground">
+                        Your role does not allow access to this section. Required role: AUDITOR
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-destructive">Failed to load audit logs</p>
+                  )}
+                </div>
               ) : logs.length === 0 ? (
                 <div className="py-8 text-center text-muted-foreground">
                   No audit logs found
@@ -134,5 +159,14 @@ export default function AuditPage() {
         </Card>
       </motion.div>
     </div>
+  )
+}
+
+export default function AuditPage() {
+  usePageAnalytics('audit')
+  return (
+    <ProtectedRoute requiredRole="AUDITOR">
+      <AuditLogsTable />
+    </ProtectedRoute>
   )
 }

@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 from apps.api.app.core.authz import get_organization_id, require_role
 from apps.api.app.core.ratelimit import optional_rate_limit
 from apps.api.app.db.session import get_db
-from apps.api.app.models.api_key import ApiKey
+from apps.api.app.deps.auth import verify_api_key_auth
+from apps.api.app.models.api_key import ApiKey, ApiKeyRole
 from apps.api.app.schemas.user import (
     UserCreate,
     UserResponse,
@@ -19,6 +20,32 @@ router = APIRouter(
     tags=["admin"],
     dependencies=[optional_rate_limit(times=60, seconds=60)],
 )
+
+
+@router.get("/me")
+async def get_current_api_key_info(
+    auth: tuple[ApiKey, any] = Depends(verify_api_key_auth),
+):
+    """
+    Get current API key information including role.
+    
+    This endpoint returns the role and organization ID of the authenticated API key.
+    """
+    api_key, org = auth
+    
+    # Map ApiKeyRole enum to string
+    role_map = {
+        ApiKeyRole.SUPERADMIN: "SUPERADMIN",
+        ApiKeyRole.ADMIN: "ADMIN",
+        ApiKeyRole.AUDITOR: "AUDITOR",
+        ApiKeyRole.VIEWER: "VIEWER",
+    }
+    
+    return {
+        "id": str(api_key.id),
+        "role": role_map.get(api_key.role, "VIEWER"),
+        "organization_id": api_key.organization_id,
+    }
 
 
 @router.get("", response_model=list[UserResponse])
