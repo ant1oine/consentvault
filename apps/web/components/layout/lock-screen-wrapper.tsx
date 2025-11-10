@@ -1,28 +1,48 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import { useAuth } from '@/components/providers'
 
 export function LockScreenWrapper({ children }: { children: React.ReactNode }) {
-  const { apiKey } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
+  const [isClient, setIsClient] = useState(false)
 
   useEffect(() => {
+    setIsClient(true)
+  }, [])
+
+  useEffect(() => {
+    // Only run on client after hydration
+    if (!isClient) return
+
     // Don't redirect if already on login page
     if (pathname === '/login') {
       return
     }
 
-    // Redirect to login if no API key
-    if (!apiKey) {
-      router.push('/login')
-    }
-  }, [apiKey, router, pathname])
+    // Check for access_token in localStorage (client-side only)
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
 
-  // Don't render children if on login page or no API key
-  if (pathname === '/login' || !apiKey) {
+    // Redirect to login if no token
+    if (!token) {
+      router.replace('/login')
+    }
+  }, [isClient, router, pathname])
+
+  // Don't render children if on login page
+  if (pathname === '/login') {
+    return null
+  }
+
+  // Don't render until client-side hydration is complete
+  if (!isClient) {
+    return null
+  }
+
+  // Check token on client-side
+  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
+  if (!token) {
     return null
   }
 

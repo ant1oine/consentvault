@@ -79,7 +79,7 @@ class OrgUser(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     org_id = Column(UUID(as_uuid=True), ForeignKey("orgs.id"), nullable=False, index=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
-    role = Column(String(20), nullable=False)  # 'admin', 'manager', 'viewer'
+    role = Column(String(20), nullable=False)  # 'admin', 'editor', 'viewer'
 
     org = relationship("Org", back_populates="members")
     user = relationship("User", back_populates="org_memberships")

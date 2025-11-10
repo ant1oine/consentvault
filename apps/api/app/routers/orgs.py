@@ -68,10 +68,10 @@ def add_user_to_org(
         )
 
     # Validate role
-    if user_data.role not in ("admin", "manager", "viewer"):
+    if user_data.role not in ("admin", "editor", "viewer"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Role must be 'admin', 'manager', or 'viewer'",
+            detail="Role must be 'admin', 'editor', or 'viewer'",
         )
 
     membership = OrgUser(org_id=org_id, user_id=user_data.user_id, role=user_data.role)
@@ -84,3 +84,4 @@ def add_user_to_org(
         "user_id": str(user_data.user_id),
         "role": user_data.role,
     }
+

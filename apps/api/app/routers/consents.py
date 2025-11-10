@@ -106,10 +106,10 @@ def list_consents(
 def revoke_consent(
     consent_id: UUID,
     current_org: Org = Depends(get_current_org),
-    _membership = Depends(require_role("manager")),
+    _membership = Depends(require_role("editor")),
     db: Session = Depends(get_db),
 ):
-    """Revoke a consent (manager+)."""
+    """Revoke a consent (editor+)."""
     consent = db.query(Consent).filter(
         Consent.id == consent_id,
         Consent.org_id == current_org.id,

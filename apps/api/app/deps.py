@@ -112,7 +112,7 @@ def require_role(required_role: str):
                 detail="User is not a member of this organization",
             )
 
-        role_hierarchy = {"viewer": 1, "manager": 2, "admin": 3}
+        role_hierarchy = {"viewer": 1, "editor": 2, "admin": 3}
         user_level = role_hierarchy.get(membership.role, 0)
         required_level = role_hierarchy.get(required_role, 0)
 

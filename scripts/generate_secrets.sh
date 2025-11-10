@@ -9,3 +9,4 @@ echo "JWT_SECRET_KEY=$(openssl rand -hex 32)"
 echo ""
 echo "✅ Copy these values to your .env file"
 
+

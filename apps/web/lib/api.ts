@@ -1,28 +1,52 @@
 // apps/web/lib/api.ts
 
-export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 
-  process.env.NEXT_PUBLIC_API_BASE_URL || 
-  "http://localhost:8000";
-
 export async function apiFetch(path: string, options: RequestInit = {}) {
-  const res = await fetch(`${API_URL}${path}`, {
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+  const orgId =
+    typeof window !== "undefined" ? localStorage.getItem("active_org_id") : null;
+
+  const headers = new Headers(options.headers || {});
+  headers.set("Content-Type", "application/json");
+
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  const baseUrl =
+    process.env.NEXT_PUBLIC_API_URL ||
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    "http://localhost:8000";
+
+  // Append org_id query param if available and not already present
+  let url = `${baseUrl}${path}`;
+  if (orgId && !url.includes("org_id=")) {
+    const sep = url.includes("?") ? "&" : "?";
+    url += `${sep}org_id=${orgId}`;
+  }
+
+  const res = await fetch(url, {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
+    headers,
   });
-  if (!res.ok) throw new Error(await res.text());
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error(`❌ API error (${res.status}): ${text}`);
+    throw new Error(text);
+  }
+
   return res.json();
 }
 
-// Core API calls only
+// Core API calls
 export async function login(email: string, password: string) {
   return apiFetch("/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });
+}
+
+export async function getMe() {
+  return apiFetch("/auth/me");
 }
 
 export async function getConsents() {
@@ -54,17 +78,17 @@ export async function checkBackendConnection() {
   }
 }
 
-// Additional minimal functions for existing pages
-export async function getMe() {
-  return apiFetch("/auth/me");
-}
-
 export async function getCheckoutUrl() {
   const data = await apiFetch("/billing/checkout");
   return data.url;
 }
 
 // Export URL helpers (endpoints exist at /consents/export.csv and /consents/export.html)
+export const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  "http://localhost:8000";
+
 export function getExportCsvUrl(orgId: string, params?: {
   subject_id?: string;
   purpose?: string;

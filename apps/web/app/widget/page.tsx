@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
+import { API_URL } from "@/lib/api";
 
 export default function WidgetPage() {
   const [purpose, setPurpose] = useState("marketing");
@@ -11,7 +10,7 @@ export default function WidgetPage() {
   const [orgId, setOrgId] = useState("");
   const [copied, setCopied] = useState(false);
 
-  const embedSnippet = `<script src="${API_BASE_URL}/widget.js"
+  const embedSnippet = `<script src="${API_URL}/widget.js"
         data-org="${orgId}"
         data-purpose="${purpose}"
         data-text="${text.replace(/"/g, '&quot;')}"
@@ -131,4 +130,5 @@ export default function WidgetPage() {
     </div>
   );
 }
+
 

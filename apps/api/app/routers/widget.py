@@ -102,3 +102,4 @@ def get_widget_js():
 """
     return Response(content=js, media_type="application/javascript")
 
+

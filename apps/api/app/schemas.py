@@ -43,7 +43,7 @@ class OrgUserCreate(BaseModel):
     """Add user to org schema."""
 
     user_id: UUID
-    role: str  # 'admin', 'manager', 'viewer'
+    role: str  # 'admin', 'editor', 'viewer'
 
 
 # Consent schemas
@@ -82,4 +82,5 @@ class ConsentListParams(BaseModel):
     from_date: datetime | None = None
     to_date: datetime | None = None
     q: str | None = None  # general search
+
 
