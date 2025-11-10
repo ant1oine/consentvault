@@ -10,13 +10,14 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
   headers.set("Content-Type", "application/json");
 
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (orgId) headers.set("X-Org-ID", orgId);
 
   const baseUrl =
     process.env.NEXT_PUBLIC_API_URL ||
     process.env.NEXT_PUBLIC_API_BASE_URL ||
     "http://localhost:8000";
 
-  // Append org_id query param if available and not already present
+  // Also append org_id query param as fallback (backend supports both)
   let url = `${baseUrl}${path}`;
   if (orgId && !url.includes("org_id=")) {
     const sep = url.includes("?") ? "&" : "?";
@@ -30,7 +31,7 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
 
   if (!res.ok) {
     const text = await res.text();
-    console.error(`❌ API error (${res.status}): ${text}`);
+    console.error(`❌ API ${res.status}: ${text}`);
     throw new Error(text);
   }
 

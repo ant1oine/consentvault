@@ -9,9 +9,9 @@ export default function Sidebar() {
 
   const navItems = [
     { name: "Dashboard", href: "/dashboard" },
-    { name: "API Dashboard", href: "/dashboard/api" },
-    { name: "Consents", href: "/dashboard/consents" },
-    { name: "Data Rights", href: "/dashboard/data-rights" },
+    { name: "API Logs", href: "/api-logs" },
+    { name: "Consents", href: "/consents" },
+    { name: "Data Rights", href: "/data-rights" },
   ];
 
   return (
