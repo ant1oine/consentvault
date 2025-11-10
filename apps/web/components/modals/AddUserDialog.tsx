@@ -15,7 +15,6 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
 import { createUser, UserCreate } from '@/lib/api'
-import { queryKeys } from '@/lib/queryKeys'
 import { toast } from 'sonner'
 
 interface AddUserDialogProps {
@@ -32,7 +31,7 @@ export function AddUserDialog({ open, onOpenChange }: AddUserDialogProps) {
   const createMutation = useMutation({
     mutationFn: (data: UserCreate) => createUser(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.users() })
+      queryClient.invalidateQueries({ queryKey: ['users'] })
       toast.success('User created successfully')
       onOpenChange(false)
       setEmail('')

@@ -12,7 +12,6 @@ import {
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getConsents } from '@/lib/api'
-import { queryKeys } from '@/lib/queryKeys'
 import { Lock, HelpCircle } from 'lucide-react'
 import {
   Tooltip,
@@ -21,13 +20,11 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { motion } from 'framer-motion'
-import { usePageAnalytics } from '@/lib/analytics'
 
 export default function ConsentsPage() {
-  usePageAnalytics('consents')
   const { data: consents, isLoading } = useQuery({
-    queryKey: queryKeys.consents({ limit: 100 }),
-    queryFn: () => getConsents({ limit: 100 }),
+    queryKey: ['consents'],
+    queryFn: () => getConsents(),
   })
 
   const consentList = consents || []
@@ -80,7 +77,7 @@ export default function ConsentsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {consentList.map((consent) => (
+                  {consentList.map((consent: any) => (
                     <TableRow key={consent.id}>
                       <TableCell className="font-mono text-sm">
                         {consent.external_user_id}

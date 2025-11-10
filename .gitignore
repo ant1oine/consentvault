@@ -1,25 +1,28 @@
+# Python
 __pycache__/
+*.pyc
 *.py[cod]
 *$py.class
-*.so
-.Python
-env/
-venv/
-ENV/
-.venv
+.pytest_cache/
+.ruff_cache/
 *.egg-info/
 dist/
 build/
-.pytest_cache/
-.coverage
-htmlcov/
-.mypy_cache/
-.ruff_cache/
+
+# Node
+node_modules/
+.next/
+*.tsbuildinfo
+
+# Environment
 .env
-*.db
-*.sqlite
+.env.local
+.env.prod
+
+# Misc
 .DS_Store
-.vscode/
+*.log
+*.sqlite
+*.db
 .idea/
-
-
+.vscode/

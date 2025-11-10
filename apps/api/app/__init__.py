@@ -1,3 +1,1 @@
 """ConsentVault API application."""
-
-

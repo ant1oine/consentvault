@@ -1,493 +1,112 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-export const API_URL = API_BASE_URL
+// apps/web/lib/api.ts
 
-export interface ApiError {
-  detail: string
-}
+export const API_URL =
+  process.env.NEXT_PUBLIC_API_URL || 
+  process.env.NEXT_PUBLIC_API_BASE_URL || 
+  "http://localhost:8000";
 
-// Types matching backend schemas
-export interface ConsentResponse {
-  id: number
-  organization_id: number
-  external_user_id: string
-  purpose_id: number
-  purpose_code: string | null
-  status: 'granted' | 'withdrawn'
-  last_event_at: string
-  source_system_id: number | null
-  evidence_ref: string | null
-  encrypted_fields: Record<string, any> | null
-}
-
-export interface ConsentEventResponse {
-  id: string
-  organization_id: number
-  aggregate_id: number
-  purpose_id: number
-  status: 'granted' | 'withdrawn'
-  method: 'checkbox' | 'tos' | 'contract' | 'other'
-  source: string | null
-  timestamp: string
-  evidence_ref: string | null
-}
-
-export interface PurposeResponse {
-  id: number
-  organization_id: number
-  code: string
-  description: string | null
-  active: boolean
-  created_at: string
-}
-
-export interface PurposeCreate {
-  code: string
-  description?: string | null
-}
-
-export interface PolicyResponse {
-  id: number
-  organization_id: number
-  purpose_id: number
-  retention_days: number
-  active: boolean
-  created_at: string
-}
-
-export interface PolicyCreate {
-  purpose_id: number
-  retention_days: number
-  active?: boolean
-}
-
-export interface WebhookEndpointResponse {
-  id: number
-  organization_id: number
-  url: string
-  active: boolean
-  created_at: string
-}
-
-export interface WebhookEndpointCreate {
-  url: string
-  secret: string
-}
-
-export interface DataRightRequestResponse {
-  id: string
-  organization_id: number
-  external_user_id: string
-  right: 'access' | 'erasure' | 'portability'
-  status: 'open' | 'in_progress' | 'completed' | 'rejected'
-  opened_at: string
-  closed_at: string | null
-  reason: string | null
-  evidence_ref: string | null
-}
-
-export interface DataRightRequestComplete {
-  evidence_ref: string
-}
-
-export interface AuditLogResponse {
-  id: string
-  organization_id: number
-  actor_api_key_id: number | null
-  event_type: string
-  object_type: string
-  object_id: string
-  prev_hash: string
-  entry_hash: string
-  request_fingerprint: string | null
-  created_at: string
-}
-
-export interface AdminAuditLogResponse {
-  id: number
-  organization_id: number
-  api_key_id: number
-  method: string
-  path: string
-  status_code: number
-  ip_address: string | null
-  request_hash: string | null
-  response_hash: string | null
-  request_body: string | null
-  created_at: string
-  verified_at: string | null
-  verifier_api_key_id: number | null
-}
-
-export interface Organization {
-  id: number
-  name: string
-  data_region: string
-  created_at: string
-}
-
-export interface OrgCreate {
-  name: string
-  data_region: string
-}
-
-export interface CreateOrgResponse {
-  organization: Organization
-  api_key: string
-  hmac_secret: string
-}
-
-function getApiKey(): string | null {
-  if (typeof window === 'undefined') return null
-  return localStorage.getItem('cv_api_key')
-}
-
-function getSelectedOrg(): { id: number; name: string } | null {
-  if (typeof window === 'undefined') return null
-  const stored = localStorage.getItem('cv_org')
-  if (!stored) return null
-  try {
-    return JSON.parse(stored)
-  } catch {
-    return null
-  }
-}
-
-async function fetchWithAuth(
-  endpoint: string,
-  options: RequestInit = {},
-  skipOrgHeader: boolean = false
-): Promise<Response> {
-  const apiKey = typeof window !== 'undefined' ? localStorage.getItem('cv_api_key') : null
-  const org = typeof window !== 'undefined' ? localStorage.getItem('cv_org') : null
-
-  if (!apiKey) {
-    // Redirect to login if no API key
-    if (typeof window !== 'undefined') {
-      window.location.href = '/login'
-    }
-    throw new Error('Missing API key')
-  }
-
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-    'X-Api-Key': apiKey,
-  }
-
-  if (org && !skipOrgHeader) {
-    try {
-      const orgData = JSON.parse(org)
-      if (orgData?.id) {
-        headers['X-Organization-ID'] = orgData.id.toString()
-      }
-    } catch {
-      // Invalid org data, skip header
-    }
-  }
-
-  const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+export async function apiFetch(path: string, options: RequestInit = {}) {
+  const res = await fetch(`${API_URL}${path}`, {
     ...options,
-    headers,
-  })
-
-  if (res.status === 401) {
-    if (typeof window !== 'undefined') {
-      localStorage.clear()
-      window.location.href = '/login'
-    }
-    throw new Error('Unauthorized')
-  }
-
-  if (res.status === 403) {
-    throw new Error('Forbidden')
-  }
-
-  if (!res.ok) {
-    const error: ApiError = await res.json().catch(() => ({ detail: 'Unknown error' }))
-    throw new Error(error.detail || `HTTP ${res.status}`)
-  }
-
-  return res
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
 }
 
-/**
- * Check if backend is reachable by attempting to fetch the health endpoint.
- * Returns true if backend is reachable, false otherwise.
- */
-export async function checkBackendConnection(): Promise<boolean> {
+// Core API calls only
+export async function login(email: string, password: string) {
+  return apiFetch("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export async function getConsents() {
+  return apiFetch("/consents");
+}
+
+export async function createConsent(data: any) {
+  return apiFetch("/consents", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getOrgUsers() {
+  return apiFetch("/orgs/users");
+}
+
+export async function exportConsents(format = "csv") {
+  return apiFetch(`/export?format=${format}`);
+}
+
+// Utility check for backend health
+export async function checkBackendConnection() {
   try {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 3000) // 3 second timeout
-
-    const response = await fetch(`${API_BASE_URL}/healthz`, {
-      method: 'GET',
-      signal: controller.signal,
-    })
-
-    clearTimeout(timeoutId)
-    return response.ok
-  } catch (error) {
-    // Network error, timeout, or other failure
-    return false
+    await apiFetch("/healthz");
+    return true;
+  } catch {
+    return false;
   }
 }
 
-// Purposes
-export async function getPurposes(): Promise<PurposeResponse[]> {
-  const response = await fetchWithAuth('/v1/admin/purposes')
-  return response.json()
+// Additional minimal functions for existing pages
+export async function getMe() {
+  return apiFetch("/auth/me");
 }
 
-export async function createPurpose(data: PurposeCreate): Promise<PurposeResponse> {
-  const response = await fetchWithAuth('/v1/admin/purposes', {
-    method: 'POST',
+export async function getCheckoutUrl() {
+  const data = await apiFetch("/billing/checkout");
+  return data.url;
+}
+
+// Export URL helpers (endpoints exist at /consents/export.csv and /consents/export.html)
+export function getExportCsvUrl(orgId: string, params?: {
+  subject_id?: string;
+  purpose?: string;
+  q?: string;
+}): string {
+  const queryParams = new URLSearchParams({ org_id: orgId });
+  if (params?.subject_id) queryParams.append('subject_id', params.subject_id);
+  if (params?.purpose) queryParams.append('purpose', params.purpose);
+  if (params?.q) queryParams.append('q', params.q);
+  return `${API_URL}/consents/export.csv?${queryParams}`;
+}
+
+export function getExportHtmlUrl(orgId: string, params?: {
+  subject_id?: string;
+  purpose?: string;
+  q?: string;
+}): string {
+  const queryParams = new URLSearchParams({ org_id: orgId });
+  if (params?.subject_id) queryParams.append('subject_id', params.subject_id);
+  if (params?.purpose) queryParams.append('purpose', params.purpose);
+  if (params?.q) queryParams.append('q', params.q);
+  return `${API_URL}/consents/export.html?${queryParams}`;
+}
+
+// Stub functions for pages that may not be fully implemented yet
+export async function revokeConsent(consentId: string, orgId: string) {
+  // Note: This endpoint may not exist in the backend yet
+  return apiFetch(`/consents/${consentId}/revoke`, {
+    method: "POST",
+  });
+}
+
+export interface UserCreate {
+  email: string;
+  display_name?: string;
+  role: 'ADMIN' | 'AUDITOR' | 'VIEWER';
+}
+
+export async function createUser(data: UserCreate) {
+  // Note: This may need org_id - check backend implementation
+  return apiFetch("/orgs/users", {
+    method: "POST",
     body: JSON.stringify(data),
-  })
-  return response.json()
-}
-
-// Policies
-export async function getPolicies(): Promise<PolicyResponse[]> {
-  const response = await fetchWithAuth('/v1/admin/policies')
-  return response.json()
-}
-
-export async function createPolicy(data: PolicyCreate): Promise<PolicyResponse> {
-  const response = await fetchWithAuth('/v1/admin/policies', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
-  return response.json()
-}
-
-// Consents
-export async function getConsents(params?: {
-  limit?: number
-  offset?: number
-}): Promise<ConsentResponse[]> {
-  const searchParams = new URLSearchParams()
-  if (params?.limit) searchParams.set('limit', params.limit.toString())
-  if (params?.offset) searchParams.set('offset', params.offset.toString())
-  
-  const query = searchParams.toString() ? `?${searchParams.toString()}` : ''
-  const response = await fetchWithAuth(`/v1/consents${query}`)
-  return response.json()
-}
-
-export async function getLatestConsent(
-  external_user_id: string,
-  purpose_code: string
-): Promise<ConsentResponse> {
-  const response = await fetchWithAuth(
-    `/v1/consents/latest?external_user_id=${encodeURIComponent(external_user_id)}&purpose_code=${encodeURIComponent(purpose_code)}`
-  )
-  return response.json()
-}
-
-// Rights
-export async function getRights(params?: {
-  status?: 'open' | 'in_progress' | 'completed' | 'rejected'
-  right?: 'access' | 'erasure' | 'portability'
-  limit?: number
-  offset?: number
-}): Promise<DataRightRequestResponse[]> {
-  const searchParams = new URLSearchParams()
-  if (params?.status) searchParams.set('status', params.status)
-  if (params?.right) searchParams.set('right', params.right)
-  if (params?.limit) searchParams.set('limit', params.limit.toString())
-  if (params?.offset) searchParams.set('offset', params.offset.toString())
-  
-  const query = searchParams.toString() ? `?${searchParams.toString()}` : ''
-  const response = await fetchWithAuth(`/v1/rights${query}`)
-  return response.json()
-}
-
-export async function completeRight(
-  request_id: string,
-  data: DataRightRequestComplete
-): Promise<DataRightRequestResponse> {
-  const response = await fetchWithAuth(`/v1/rights/${request_id}/complete`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
-  return response.json()
-}
-
-// Audit
-export async function getAuditLogs(params?: {
-  event_type?: string
-  object_type?: string
-  since?: string
-  limit?: number
-  offset?: number
-}): Promise<AuditLogResponse[]> {
-  const searchParams = new URLSearchParams()
-  if (params?.event_type) searchParams.set('event_type', params.event_type)
-  if (params?.object_type) searchParams.set('object_type', params.object_type)
-  if (params?.since) searchParams.set('since', params.since)
-  if (params?.limit) searchParams.set('limit', params.limit.toString())
-  if (params?.offset) searchParams.set('offset', params.offset.toString())
-  
-  const query = searchParams.toString() ? `?${searchParams.toString()}` : ''
-  const response = await fetchWithAuth(`/v1/audit${query}`)
-  return response.json()
-}
-
-// Admin Audit (API audit logs)
-export async function getAdminAuditLogs(limit = 100): Promise<AdminAuditLogResponse[]> {
-  const response = await fetchWithAuth(`/v1/admin/audit/?limit=${limit}`)
-  return response.json()
-}
-
-// Webhooks
-export async function getWebhooks(): Promise<WebhookEndpointResponse[]> {
-  const response = await fetchWithAuth('/v1/admin/webhooks')
-  return response.json()
-}
-
-export async function createWebhook(data: WebhookEndpointCreate): Promise<WebhookEndpointResponse> {
-  const response = await fetchWithAuth('/v1/admin/webhooks', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
-  return response.json()
-}
-
-export async function deleteWebhook(id: number): Promise<void> {
-  const response = await fetchWithAuth(`/v1/admin/webhooks/${id}`, {
-    method: 'DELETE',
-  })
-  if (response.status !== 204) {
-    const error: ApiError = await response.json().catch(() => ({ detail: 'Unknown error' }))
-    throw new Error(error.detail || `HTTP ${response.status}`)
-  }
-}
-
-// Organizations
-export async function getOrganizations(): Promise<Organization[]> {
-  const response = await fetchWithAuth('/v1/admin/organizations')
-  return response.json()
-}
-
-// Get all organizations (for superadmins, without org context)
-export async function getAllOrganizations(): Promise<Organization[]> {
-  const response = await fetchWithAuth('/v1/admin/organizations', {}, true)
-  return response.json()
-}
-
-export async function createOrganization(data: OrgCreate): Promise<CreateOrgResponse> {
-  const response = await fetchWithAuth('/v1/admin/organizations', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
-  return response.json()
-}
-
-// Users
-export type User = {
-  id: string
-  organization_id: number
-  email: string
-  display_name?: string | null
-  role: 'ADMIN' | 'AUDITOR' | 'VIEWER'
-  active: boolean
-  created_at: string
-  updated_at: string
-}
-
-export type UserCreate = {
-  email: string
-  display_name?: string
-  role?: 'ADMIN' | 'AUDITOR' | 'VIEWER'
-}
-
-export type UserUpdateRole = {
-  role: 'ADMIN' | 'AUDITOR' | 'VIEWER'
-}
-
-export type UserToggleActive = {
-  active: boolean
-}
-
-export async function getUsers(): Promise<User[]> {
-  const response = await fetchWithAuth('/v1/admin/users')
-  return response.json()
-}
-
-export async function createUser(data: UserCreate): Promise<User> {
-  const response = await fetchWithAuth('/v1/admin/users', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
-  return response.json()
-}
-
-export async function updateUserRole(id: string, data: UserUpdateRole): Promise<User> {
-  const response = await fetchWithAuth(`/v1/admin/users/${id}/role`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
-  return response.json()
-}
-
-export async function toggleUserActive(id: string, data: UserToggleActive): Promise<User> {
-  const response = await fetchWithAuth(`/v1/admin/users/${id}/active`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
-  return response.json()
-}
-
-// Get current user (API key) info
-export type CurrentUser = {
-  id: string
-  role: 'SUPERADMIN' | 'ADMIN' | 'AUDITOR' | 'VIEWER'
-  organization_id: number | null
-}
-
-export async function getCurrentUser(): Promise<CurrentUser> {
-  const response = await fetchWithAuth('/v1/admin/users/me')
-  return response.json()
-}
-
-// Audit Metrics
-export interface AuditMetrics {
-  totals: { events: number; organizations: number; api_keys: number }
-  last_24h: { events: number; by_status: { '2xx': number; '4xx': number; '5xx': number } }
-  verification: { verified: number; unverified: number; rate: number }
-  top_endpoints: { path: string; count: number }[]
-  recent_unsigned_exports_7d: number
-}
-
-export interface AuditTimeseries {
-  window: '24h' | '7d' | '30d'
-  bucket: 'hour' | 'day'
-  series: Array<{ ts: string; events: number; s2xx: number; s4xx: number; s5xx: number }>
-}
-
-export async function getAuditMetrics(orgId?: number): Promise<AuditMetrics> {
-  const params = new URLSearchParams()
-  if (orgId) params.set('organization_id', String(orgId))
-  // skipOrgHeader = true when viewing all orgs (orgId not provided) or when explicitly filtering by orgId
-  // Both cases mean we're controlling org scope via query param, not header
-  const response = await fetchWithAuth(`/v1/admin/audit/metrics?${params.toString()}`, {
-    method: 'GET',
-  }, true) // Always skip org header - use query param for org filtering
-  return response.json()
-}
-
-export async function getAuditTimeseries(options?: {
-  orgId?: number
-  window?: '24h' | '7d' | '30d'
-  bucket?: 'hour' | 'day'
-}): Promise<AuditTimeseries> {
-  const params = new URLSearchParams()
-  if (options?.orgId) params.set('organization_id', String(options.orgId))
-  params.set('window', options?.window ?? '24h')
-  params.set('bucket', options?.bucket ?? 'hour')
-  // skipOrgHeader = true when viewing all orgs (orgId not provided) or when explicitly filtering by orgId
-  // Both cases mean we're controlling org scope via query param, not header
-  const response = await fetchWithAuth(`/v1/admin/audit/timeseries?${params.toString()}`, {
-    method: 'GET',
-  }, true) // Always skip org header - use query param for org filtering
-  return response.json()
+  });
 }

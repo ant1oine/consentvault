@@ -1,178 +1,133 @@
 """Consent router."""
 from datetime import datetime
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 
-from apps.api.app.core.rate_limit import rate_limiter
-from apps.api.app.db.session import get_db
-from apps.api.app.deps.auth import verify_api_key_auth
-from apps.api.app.models.api_key import ApiKey
-from apps.api.app.models.organization import Organization
-from apps.api.app.schemas.consent import (
-    ConsentCreate,
-    ConsentEventResponse,
-    ConsentResponse,
-    ConsentWithdraw,
-)
-from apps.api.app.services.consent import ConsentService
+from app.db import Consent, Org, get_db
+from app.deps import get_current_org, require_role
+from app.schemas import ConsentCreate, ConsentOut
+from app.security import compute_version_hash
 
-router = APIRouter(prefix="/v1/consents", tags=["consents"])
+router = APIRouter(prefix="/consents", tags=["Consents"])
 
 
-@router.post("", response_model=ConsentResponse, status_code=201)
-async def create_consent(
-    data: ConsentCreate,
-    request: Request,
+@router.post("", response_model=ConsentOut, status_code=status.HTTP_201_CREATED)
+def create_consent(
+    consent_data: ConsentCreate,
+    org_id: UUID = Query(..., alias="org_id"),
+    request: Request = None,
     db: Session = Depends(get_db),
-    auth: tuple[ApiKey, Organization] = Depends(verify_api_key_auth),
 ):
-    """Create or update consent."""
-    api_key, org = auth
+    """
+    Create consent record (public endpoint, but requires org_id).
+    For widget usage, org_id can be in query param or embedded in signed token.
+    """
+    # Verify org exists
+    org = db.query(Org).filter(Org.id == org_id).first()
+    if not org:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organization not found",
+        )
 
-    # Rate limit
-    await rate_limiter.check_rate_limit(str(api_key.id), request)
+    # Get IP and user agent from request
+    ip = None
+    user_agent = None
+    if request:
+        if request.client:
+            ip = request.client.host
+        user_agent = request.headers.get("user-agent")
 
-    # Get IP and user agent
-    ip_address = request.client.host if request.client else None
-    user_agent = request.headers.get("user-agent")
+    # Use provided or request values
+    ip = consent_data.ip or ip
+    user_agent = consent_data.user_agent or user_agent
 
-    consent_service = ConsentService(db)
-    aggregate = consent_service.create_or_update_consent(
-        organization_id=org.id,
-        external_user_id=data.external_user_id,
-        purpose_code=data.purpose_code,
-        status=data.status,
-        method=data.method,
-        source=data.source,
-        system_code=data.system_code,
-        evidence_ref=data.evidence_ref,
-        encrypted_fields=data.encrypted_fields,
-        api_key_id=api_key.id,
-        ip_address=ip_address,
+    # Compute version hash
+    version_hash = compute_version_hash(consent_data.purpose, consent_data.text)
+
+    consent = Consent(
+        org_id=org_id,
+        subject_id=consent_data.subject_id,
+        purpose=consent_data.purpose,
+        text=consent_data.text,
+        version_hash=version_hash,
+        ip=ip,
         user_agent=user_agent,
+        metadata_json=consent_data.metadata or {},
     )
 
-    # Add purpose_code to response
-    response_dict = aggregate.to_dict()
-    response_dict["purpose_code"] = data.purpose_code
-    return response_dict
+    db.add(consent)
+    db.commit()
+    db.refresh(consent)
+
+    return consent
 
 
-@router.get("/latest", response_model=ConsentResponse)
-async def get_latest_consent(
-    external_user_id: str = Query(...),
-    purpose_code: str = Query(...),
-    request: Request = None,
+@router.get("", response_model=list[ConsentOut])
+def list_consents(
+    org_id: UUID = Query(...),
+    subject_id: str | None = Query(None),
+    purpose: str | None = Query(None),
+    from_date: datetime | None = Query(None),
+    to_date: datetime | None = Query(None),
+    q: str | None = Query(None),
+    current_org: Org = Depends(get_current_org),
+    _membership = Depends(require_role("viewer")),
     db: Session = Depends(get_db),
-    auth: tuple[ApiKey, Organization] = Depends(verify_api_key_auth),
 ):
-    """Get latest consent for user and purpose."""
-    api_key, org = auth
+    """List consents with filters (viewer+)."""
+    query = db.query(Consent).filter(Consent.org_id == current_org.id)
 
-    # Rate limit
-    await rate_limiter.check_rate_limit(str(api_key.id), request)
+    if subject_id:
+        query = query.filter(Consent.subject_id == subject_id)
+    if purpose:
+        query = query.filter(Consent.purpose == purpose)
+    if from_date:
+        query = query.filter(Consent.accepted_at >= from_date)
+    if to_date:
+        query = query.filter(Consent.accepted_at <= to_date)
+    if q:
+        query = query.filter(
+            or_(
+                Consent.subject_id.ilike(f"%{q}%"),
+                Consent.purpose.ilike(f"%{q}%"),
+                Consent.text.ilike(f"%{q}%"),
+            )
+        )
 
-    consent_service = ConsentService(db)
-    aggregate = consent_service.get_latest_consent(org.id, external_user_id, purpose_code)
-
-    if not aggregate:
-        from apps.api.app.core.errors import NotFoundError
-        raise NotFoundError("Consent not found")
-
-    # Get purpose code
-    from apps.api.app.models.purpose import Purpose
-    purpose = db.query(Purpose).filter(Purpose.id == aggregate.purpose_id).first()
-    response_dict = aggregate.to_dict()
-    response_dict["purpose_code"] = purpose.code if purpose else None
-    return response_dict
+    consents = query.order_by(Consent.accepted_at.desc()).limit(1000).all()
+    return consents
 
 
-@router.get("", response_model=list[ConsentResponse])
-async def list_consents(
-    limit: int = Query(100, le=1000),
-    offset: int = Query(0, ge=0),
-    request: Request = None,
+@router.post("/{consent_id}/revoke", status_code=status.HTTP_200_OK)
+def revoke_consent(
+    consent_id: UUID,
+    current_org: Org = Depends(get_current_org),
+    _membership = Depends(require_role("manager")),
     db: Session = Depends(get_db),
-    auth: tuple[ApiKey, Organization] = Depends(verify_api_key_auth),
 ):
-    """List consent aggregates."""
-    api_key, org = auth
+    """Revoke a consent (manager+)."""
+    consent = db.query(Consent).filter(
+        Consent.id == consent_id,
+        Consent.org_id == current_org.id,
+    ).first()
 
-    # Rate limit
-    await rate_limiter.check_rate_limit(str(api_key.id), request)
+    if not consent:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Consent not found",
+        )
 
-    consent_service = ConsentService(db)
-    aggregates = consent_service.list_aggregates(org.id, limit=limit, offset=offset)
+    if consent.revoked_at:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Consent already revoked",
+        )
 
-    # Get purpose codes for each aggregate
-    from apps.api.app.models.purpose import Purpose
-    results = []
-    for aggregate in aggregates:
-        purpose = db.query(Purpose).filter(Purpose.id == aggregate.purpose_id).first()
-        response_dict = aggregate.to_dict()
-        response_dict["purpose_code"] = purpose.code if purpose else None
-        results.append(response_dict)
+    consent.revoked_at = datetime.utcnow()
+    db.commit()
 
-    return results
-
-
-@router.get("/events", response_model=list[ConsentEventResponse])
-async def list_consent_events(
-    since: datetime | None = Query(None),
-    limit: int = Query(100, le=1000),
-    offset: int = Query(0, ge=0),
-    request: Request = None,
-    db: Session = Depends(get_db),
-    auth: tuple[ApiKey, Organization] = Depends(verify_api_key_auth),
-):
-    """List consent events."""
-    api_key, org = auth
-
-    # Rate limit
-    await rate_limiter.check_rate_limit(str(api_key.id), request)
-
-    consent_service = ConsentService(db)
-    events = consent_service.list_events(org.id, since=since, limit=limit, offset=offset)
-    return events
-
-
-@router.post("/{external_user_id}/withdraw", response_model=ConsentResponse, status_code=201)
-async def withdraw_consent(
-    external_user_id: str,
-    data: ConsentWithdraw,
-    request: Request,
-    db: Session = Depends(get_db),
-    auth: tuple[ApiKey, Organization] = Depends(verify_api_key_auth),
-):
-    """Withdraw consent for a user and purpose."""
-    api_key, org = auth
-
-    # Rate limit
-    await rate_limiter.check_rate_limit(str(api_key.id), request)
-
-    # Get IP and user agent
-    ip_address = request.client.host if request.client else None
-    user_agent = request.headers.get("user-agent")
-
-    consent_service = ConsentService(db)
-    from apps.api.app.models.consent import ConsentMethod, ConsentStatus
-
-    aggregate = consent_service.create_or_update_consent(
-        organization_id=org.id,
-        external_user_id=external_user_id,
-        purpose_code=data.purpose_code,
-        status=ConsentStatus.WITHDRAWN,
-        method=ConsentMethod.OTHER,
-        source="api",
-        api_key_id=api_key.id,
-        ip_address=ip_address,
-        user_agent=user_agent,
-    )
-
-    # Add purpose_code to response
-    response_dict = aggregate.to_dict()
-    response_dict["purpose_code"] = data.purpose_code
-    return response_dict
-
-
+    return {"message": "Consent revoked", "consent_id": str(consent_id)}

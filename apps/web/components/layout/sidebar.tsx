@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { useAuth } from '@/components/providers/AuthContext'
+import { useAuth } from '@/components/providers'
 import {
   LayoutDashboard,
   FileCheck,
@@ -21,6 +21,7 @@ import {
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard, requiredRole: 'VIEWER' as const },
+  { name: 'API Dashboard', href: '/dashboard', icon: Activity, requiredRole: 'VIEWER' as const },
   { name: 'Consents', href: '/consents', icon: FileCheck, requiredRole: 'VIEWER' as const },
   { name: 'Data Rights', href: '/rights', icon: Shield, requiredRole: 'VIEWER' as const },
   { name: 'Audit Logs', href: '/audit', icon: FileText, requiredRole: 'AUDITOR' as const },

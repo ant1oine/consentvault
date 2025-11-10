@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: consentvault
+      POSTGRES_PASSWORD: consentvault
+      POSTGRES_DB: consentvault
+    ports:
+      - "5432:5432"
+    volumes:
+      - consentvault_db_data:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: ./apps/api
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./apps/api:/app
+    environment:
+      DATABASE_URL: postgresql+psycopg://consentvault:consentvault@db:5432/consentvault
+      LOG_LEVEL: debug
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+
+  web:
+    build:
+      context: ./apps/web
+    command: npm run dev
+    volumes:
+      - ./apps/web:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+    depends_on:
+      - api
+
+volumes:
+  consentvault_db_data:
+

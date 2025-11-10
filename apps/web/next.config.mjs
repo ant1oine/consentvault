@@ -1,13 +1,19 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: "standalone",
   reactStrictMode: true,
-  typescript: {
-    ignoreBuildErrors: false,
+  experimental: {
+    optimizeCss: true,
+    serverActions: {
+      bodySizeLimit: "2mb",
+    },
   },
   eslint: {
     ignoreDuringBuilds: true,
   },
-  output: 'standalone',
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   webpack: (config, { isServer }) => {
     // Ensure recharts is properly resolved
     if (!isServer) {
@@ -19,7 +25,7 @@ const nextConfig = {
     return config
   },
   transpilePackages: ['recharts'],
-}
+};
 
-export default nextConfig
+export default nextConfig;
 

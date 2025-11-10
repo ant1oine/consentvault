@@ -1,139 +1,190 @@
-'use client'
+"use client";
 
-import { useQuery } from '@tanstack/react-query'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
-import { getConsents, getRights, getPurposes } from '@/lib/api'
-import { queryKeys } from '@/lib/queryKeys'
-import { useMemo } from 'react'
-import { motion } from 'framer-motion'
-import { FileCheck, XCircle, Shield, Target } from 'lucide-react'
-import { useAuth } from '@/components/providers/AuthContext'
-import { usePageAnalytics } from '@/lib/analytics'
-
-function AnimatedCounter({ value }: { value: number }) {
-  return (
-    <motion.span
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="text-3xl font-bold"
-    >
-      {value.toLocaleString()}
-    </motion.span>
-  )
-}
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { getConsents, getMe, revokeConsent, getExportCsvUrl, getExportHtmlUrl } from "@/lib/api";
 
 export default function DashboardPage() {
-  usePageAnalytics('dashboard')
-  const { apiKey, org } = useAuth()
+  const router = useRouter();
+  const [consents, setConsents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [orgId, setOrgId] = useState<string | null>(null);
+  const [orgs, setOrgs] = useState<any[]>([]);
+  const [filters, setFilters] = useState({ subject_id: "", purpose: "", q: "" });
 
-  const { data: consents, isLoading: consentsLoading } = useQuery({
-    queryKey: queryKeys.consents({ limit: 1000 }),
-    queryFn: () => getConsents({ limit: 1000 }),
-    enabled: !!apiKey,
-  })
-
-  const { data: rights, isLoading: rightsLoading } = useQuery({
-    queryKey: queryKeys.rights(),
-    queryFn: () => getRights(),
-    enabled: !!apiKey,
-  })
-
-  const { data: purposes, isLoading: purposesLoading } = useQuery({
-    queryKey: queryKeys.purposes(),
-    queryFn: () => getPurposes(),
-    enabled: !!apiKey,
-  })
-
-  const stats = useMemo(() => {
-    const totalConsents = consents?.length || 0
-    const totalWithdrawals =
-      consents?.filter((c) => c.status === 'withdrawn').length || 0
-    const openRights = rights?.filter((r) => r.status === 'open').length || 0
-    const activePurposes = purposes?.filter((p) => p.active).length || 0
-
-    return {
-      totalConsents,
-      totalWithdrawals,
-      openRights,
-      activePurposes,
+  useEffect(() => {
+    const token = localStorage.getItem("cv_token");
+    if (!token) {
+      router.push("/login");
+      return;
     }
-  }, [consents, rights, purposes])
 
-  const isLoading = consentsLoading || rightsLoading || purposesLoading
+    loadData();
+  }, []);
 
-  const cards = [
-    {
-      title: 'Total Consents',
-      value: stats.totalConsents,
-      icon: FileCheck,
-      color: 'text-blue-600',
-    },
-    {
-      title: 'Total Withdrawals',
-      value: stats.totalWithdrawals,
-      icon: XCircle,
-      color: 'text-red-600',
-    },
-    {
-      title: 'Open Rights Requests',
-      value: stats.openRights,
-      icon: Shield,
-      color: 'text-orange-600',
-    },
-    {
-      title: 'Active Purposes',
-      value: stats.activePurposes,
-      icon: Target,
-      color: 'text-green-600',
-    },
-  ]
+  useEffect(() => {
+    if (orgId) {
+      loadConsents();
+    }
+  }, [orgId, filters]);
+
+  async function loadData() {
+    try {
+      const me = await getMe();
+      setOrgs(me.orgs || []);
+      if (me.orgs && me.orgs.length > 0) {
+        const firstOrgId = me.orgs[0].org_id;
+        setOrgId(firstOrgId);
+        localStorage.setItem("cv_org_id", firstOrgId);
+      }
+    } catch (err) {
+      console.error("Failed to load user data:", err);
+      router.push("/login");
+    }
+  }
+
+  async function loadConsents() {
+    if (!orgId) return;
+    setLoading(true);
+    try {
+      const data = await getConsents();
+      setConsents(data);
+    } catch (err) {
+      console.error("Failed to load consents:", err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleRevoke(consentId: string) {
+    if (!orgId) return;
+    if (!confirm("Are you sure you want to revoke this consent?")) return;
+    
+    try {
+      await revokeConsent(consentId, orgId);
+      loadConsents();
+    } catch (err) {
+      alert("Failed to revoke consent");
+    }
+  }
+
+  function handleExportCsv() {
+    if (!orgId) return;
+    window.open(getExportCsvUrl(orgId, filters), "_blank");
+  }
+
+  function handleExportHtml() {
+    if (!orgId) return;
+    window.open(getExportHtmlUrl(orgId, filters), "_blank");
+  }
+
+  if (loading && consents.length === 0) {
+    return <div className="p-8">Loading...</div>;
+  }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-3xl font-semibold">Dashboard</h1>
-        <p className="text-muted-foreground mt-2">
-          Overview of your consent management system
-        </p>
-        {process.env.NODE_ENV === 'development' && (
-          <div className="mt-4 p-4 bg-muted rounded-lg text-sm">
-            <p>API Key: {apiKey ? apiKey.slice(0, 8) + '...' : 'Not logged in'}</p>
-            <p>Org: {org ? org.name : 'None'}</p>
-          </div>
-        )}
+    <div className="p-8">
+      <div className="mb-6 flex justify-between items-center">
+        <h1 className="text-3xl font-semibold">Consent Dashboard</h1>
+        <div className="flex gap-2">
+          <button
+            onClick={handleExportCsv}
+            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+          >
+            Export CSV
+          </button>
+          <button
+            onClick={handleExportHtml}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            Print/PDF
+          </button>
+        </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        {cards.map((card, index) => {
-          const Icon = card.icon
-          return (
-            <motion.div
-              key={card.title}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: index * 0.1 }}
-            >
-              <Card className="glass-card">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    {card.title}
-                  </CardTitle>
-                  <Icon className={`h-4 w-4 ${card.color}`} />
-                </CardHeader>
-                <CardContent>
-                  {isLoading ? (
-                    <Skeleton className="h-8 w-20" />
-                  ) : (
-                    <AnimatedCounter value={card.value} />
+      {orgs.length > 1 && (
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-1">Organization</label>
+          <select
+            value={orgId || ""}
+            onChange={(e) => {
+              setOrgId(e.target.value);
+              localStorage.setItem("cv_org_id", e.target.value);
+            }}
+            className="px-3 py-2 border border-gray-300 rounded-md"
+          >
+            {orgs.map((org) => (
+              <option key={org.org_id} value={org.org_id}>
+                {org.org_id}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <div className="mb-4 grid grid-cols-3 gap-4">
+        <input
+          type="text"
+          placeholder="Search..."
+          value={filters.q}
+          onChange={(e) => setFilters({ ...filters, q: e.target.value })}
+          className="px-3 py-2 border border-gray-300 rounded-md"
+        />
+        <input
+          type="text"
+          placeholder="Subject ID"
+          value={filters.subject_id}
+          onChange={(e) => setFilters({ ...filters, subject_id: e.target.value })}
+          className="px-3 py-2 border border-gray-300 rounded-md"
+        />
+        <input
+          type="text"
+          placeholder="Purpose"
+          value={filters.purpose}
+          onChange={(e) => setFilters({ ...filters, purpose: e.target.value })}
+          className="px-3 py-2 border border-gray-300 rounded-md"
+        />
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="min-w-full bg-white border border-gray-300">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="px-4 py-2 text-left border">Subject ID</th>
+              <th className="px-4 py-2 text-left border">Purpose</th>
+              <th className="px-4 py-2 text-left border">Text</th>
+              <th className="px-4 py-2 text-left border">Accepted At</th>
+              <th className="px-4 py-2 text-left border">Revoked At</th>
+              <th className="px-4 py-2 text-left border">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {consents.map((consent) => (
+              <tr key={consent.id}>
+                <td className="px-4 py-2 border">{consent.subject_id}</td>
+                <td className="px-4 py-2 border">{consent.purpose}</td>
+                <td className="px-4 py-2 border max-w-xs truncate">{consent.text}</td>
+                <td className="px-4 py-2 border">
+                  {new Date(consent.accepted_at).toLocaleString()}
+                </td>
+                <td className="px-4 py-2 border">
+                  {consent.revoked_at ? new Date(consent.revoked_at).toLocaleString() : "-"}
+                </td>
+                <td className="px-4 py-2 border">
+                  {!consent.revoked_at && (
+                    <button
+                      onClick={() => handleRevoke(consent.id)}
+                      className="text-red-600 hover:text-red-800"
+                    >
+                      Revoke
+                    </button>
                   )}
-                </CardContent>
-              </Card>
-            </motion.div>
-          )
-        })}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
-  )
+  );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useAuth } from "@/components/providers/AuthContext";
+import { useAuth } from "@/components/providers";
 
 interface ProtectedRouteProps {
   requiredRole: "VIEWER" | "ADMIN" | "AUDITOR" | "SUPERADMIN";

@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import { useAuth } from '@/components/providers/AuthContext'
+import { useAuth } from '@/components/providers'
 
 export function LockScreenWrapper({ children }: { children: React.ReactNode }) {
   const { apiKey } = useAuth()
