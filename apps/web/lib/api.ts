@@ -120,11 +120,13 @@ export async function apiFetchWithApiKey(path: string, apiKey: string, options: 
   return res.json();
 }
 
-export async function getConsents(apiKey?: string) {
+export async function getConsents(apiKey?: string, orgId?: string) {
   if (apiKey) {
     return apiFetchWithApiKey("/v1/consents", apiKey);
   }
-  return apiFetch("/consents");
+  // Use JWT auth with optional org_id for superadmins
+  const path = orgId ? `/consents?org_id=${orgId}` : "/consents";
+  return apiFetch(path);
 }
 
 export async function getOrgs() {
@@ -153,8 +155,9 @@ export async function createUser(data: { org_id: string; email: string; name: st
   });
 }
 
-export async function getDashboardSummary(orgId: string) {
-  return apiFetch(`/v1/dashboard/summary?org_id=${orgId}`);
+export async function getDashboardSummary(orgId?: string) {
+  const path = orgId ? `/v1/dashboard/summary?org_id=${orgId}` : "/v1/dashboard/summary";
+  return apiFetch(path);
 }
 
 export async function getAuditLogs(orgId?: string) {

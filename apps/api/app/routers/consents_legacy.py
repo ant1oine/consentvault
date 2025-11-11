@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
-from app.db import Consent, Org, get_db
-from app.deps import get_current_org, require_role
+from app.db import Consent, Org, OrgUser, get_db
+from app.deps import get_current_org, get_current_user, require_role
 from app.schemas import ConsentCreate, ConsentOut
 from app.security import compute_version_hash
 
@@ -68,18 +68,45 @@ def create_consent_legacy(
 
 @router.get("", response_model=list[ConsentOut])
 def list_consents(
-    org_id: UUID = Query(...),
+    org_id: UUID | None = Query(None, description="Organization ID (optional for superadmins)"),
     subject_id: str | None = Query(None),
     purpose: str | None = Query(None),
     from_date: datetime | None = Query(None),
     to_date: datetime | None = Query(None),
     q: str | None = Query(None),
-    current_org: Org = Depends(get_current_org),
-    _membership = Depends(require_role("viewer")),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List consents with filters (viewer+, JWT auth for dashboard)."""
-    query = db.query(Consent).filter(Consent.org_id == current_org.id)
+    """List consents with filters (viewer+, JWT auth for dashboard). Superadmins can omit org_id for global view."""
+    # Superadmins can view all consents without org_id
+    if current_user.is_superadmin and not org_id:
+        query = db.query(Consent)
+    elif org_id:
+        # Verify org exists
+        org = db.query(Org).filter(Org.id == org_id).first()
+        if not org:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Organization not found",
+            )
+        # For regular users, verify membership
+        if not current_user.is_superadmin:
+            membership = db.query(OrgUser).filter(
+                OrgUser.org_id == org_id,
+                OrgUser.user_id == current_user.id
+            ).first()
+            if not membership:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="User is not a member of this organization",
+                )
+        query = db.query(Consent).filter(Consent.org_id == org_id)
+    else:
+        # Regular users require org_id
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Organization ID required",
+        )
 
     if subject_id:
         query = query.filter(Consent.subject_id == subject_id)

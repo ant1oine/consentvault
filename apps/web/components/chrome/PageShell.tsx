@@ -108,7 +108,12 @@ function UserDropdown({
   router: any;
 }) {
   const activeOrg = user?.orgs?.find((org) => org.org_id === activeOrgId);
-  const userRole = activeOrg?.role === "admin" ? "Administrator" : "Member";
+  // Determine user role: Superadmin > Admin > Member
+  const userRole = user?.is_superadmin
+    ? "Superadmin"
+    : activeOrg?.role === "admin"
+    ? "Admin"
+    : "Member";
   const userName = user?.email?.split("@")[0] || "Admin";
 
   return (

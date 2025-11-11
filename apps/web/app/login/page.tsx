@@ -56,21 +56,38 @@ export default function LoginPage() {
         if (meRes.ok) {
           const me = await meRes.json();
           if (me.orgs?.length > 0) {
-            setActiveOrgId(me.orgs[0].org_id);
+            const firstOrgId = me.orgs[0].org_id || me.orgs[0].id;
+            if (firstOrgId) {
+              setActiveOrgId(firstOrgId);
+            }
           }
+          
+          // Refresh auth state to update the context
+          await refreshUser();
+          
+          // Wait a bit to ensure cookie is flushed before redirect
+          await new Promise((r) => setTimeout(r, 300));
+          
+          // Redirect based on org status
+          if (me.orgs?.length > 0 || me.is_superadmin) {
+            router.push("/dashboard");
+          } else {
+            // No orgs - redirect to create-org
+            router.push("/create-org");
+          }
+        } else {
+          // If /me fails, still try to refresh and go to dashboard
+          await refreshUser();
+          await new Promise((r) => setTimeout(r, 300));
+          router.push("/dashboard");
         }
       } catch (err) {
         console.warn("Could not fetch org info, will be set on dashboard load:", err);
+        // Refresh auth state anyway
+        await refreshUser();
+        await new Promise((r) => setTimeout(r, 300));
+        router.push("/dashboard");
       }
-
-      // Refresh auth state to update the context
-      await refreshUser();
-      
-      // Wait a bit to ensure cookie is flushed before redirect
-      await new Promise((r) => setTimeout(r, 300));
-      
-      // Navigate to dashboard (redirect after setting token)
-      router.push("/dashboard");
     } catch (err) {
       alert("Invalid credentials");
       setIsSubmitting(false);

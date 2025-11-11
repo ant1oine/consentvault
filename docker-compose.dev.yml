@@ -1,12 +1,14 @@
 services:
   db:
     image: postgres:16
+    container_name: consentvault-db-1
+    restart: always
+    ports:
+      - "5432:5432"
     environment:
       POSTGRES_USER: consentvault
       POSTGRES_PASSWORD: consentvault
       POSTGRES_DB: consentvault
-    ports:
-      - "5432:5432"
     volumes:
       - consentvault_db_data:/var/lib/postgresql/data
 

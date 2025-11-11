@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -9,13 +11,79 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { FileCheck, RotateCcw, Users, Server, FilePlus, AlertCircle } from "lucide-react";
 
 export default function DashboardPage() {
-  const { activeOrgId } = useAuth();
+  const { activeOrgId, user, isLoading: authLoading } = useAuth();
+  const router = useRouter();
+
+  // Redirect to create-org if user has no orgs (and not superadmin)
+  useEffect(() => {
+    if (!authLoading && user && !user.is_superadmin && (!user.orgs || user.orgs.length === 0)) {
+      router.replace("/create-org");
+    }
+  }, [authLoading, user, router]);
 
   const { data: summary, isLoading, error } = useQuery({
     queryKey: queryKeys.dashboardSummary(activeOrgId || ""),
-    queryFn: () => getDashboardSummary(activeOrgId!),
-    enabled: !!activeOrgId,
+    queryFn: () => getDashboardSummary(activeOrgId || undefined),
+    enabled: !authLoading && !!user && (!!activeOrgId || user.is_superadmin), // Only fetch if we have user context
   });
+
+  if (authLoading) {
+    return (
+      <section>
+        <div className="mb-4">
+          <Skeleton className="h-8 w-64 mb-2" />
+          <Skeleton className="h-4 w-96" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mt-6">
+          {[1, 2, 3, 4].map((i) => (
+            <div
+              key={i}
+              className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+            >
+              <Skeleton className="h-5 w-5 mb-2" />
+              <Skeleton className="h-4 w-24 mb-2" />
+              <Skeleton className="h-8 w-16" />
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  // Show message if no orgs found
+  if (!authLoading && user && !user.is_superadmin && (!user.orgs || user.orgs.length === 0)) {
+    return (
+      <section>
+        <div className="mb-4">
+          <h2 className="text-2xl font-semibold text-slate-900 tracking-tight">
+            Consent Management Overview
+          </h2>
+          <p className="text-sm text-slate-500">
+            Monitor your organization's consent and compliance activity
+          </p>
+        </div>
+        <div className="rounded-2xl bg-yellow-50 border border-yellow-200 shadow-sm p-6 mt-6">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-yellow-600" />
+            <div>
+              <p className="text-sm font-medium text-yellow-800">
+                No organization found
+              </p>
+              <p className="text-sm text-yellow-700 mt-1">
+                Please create an organization to get started.
+              </p>
+              <Link
+                href="/create-org"
+                className="mt-3 inline-block bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+              >
+                Create Organization
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   if (isLoading) {
     return (

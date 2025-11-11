@@ -11,21 +11,24 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Download, AlertCircle } from "lucide-react";
 
 export default function ConsentsPage() {
-  const { activeOrgId } = useAuth();
+  const { activeOrgId, user } = useAuth();
   const [search, setSearch] = useState("");
 
-  // First, fetch org details to get the API key
+  // For superadmins, fetch consents directly without needing org details
+  const isSuperadmin = user?.is_superadmin;
+  
+  // First, fetch org details to get the API key (only for regular users)
   const { data: orgDetails, isLoading: isLoadingOrg } = useQuery({
     queryKey: queryKeys.orgDetails(activeOrgId || ""),
     queryFn: () => getOrgDetails(activeOrgId!),
-    enabled: !!activeOrgId,
+    enabled: !!activeOrgId && !isSuperadmin,
   });
 
-  // Then fetch consents using the API key
+  // Then fetch consents using the API key (for regular users) or JWT (for superadmins)
   const { data: consents = [], isLoading: isLoadingConsents, error } = useQuery({
     queryKey: queryKeys.consents({ apiKey: orgDetails?.api_key }),
-    queryFn: () => getConsents(orgDetails?.api_key),
-    enabled: !!orgDetails?.api_key,
+    queryFn: () => getConsents(orgDetails?.api_key, activeOrgId || undefined),
+    enabled: isSuperadmin || !!orgDetails?.api_key,
   });
 
   const isLoading = isLoadingOrg || isLoadingConsents;

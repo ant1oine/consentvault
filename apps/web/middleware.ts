@@ -9,6 +9,7 @@ export async function middleware(req: NextRequest) {
   const publicPaths = [
     "/", // homepage
     "/login",
+    "/create-org", // Allow access to create-org (will check auth in component)
     "/privacy",
     "/terms",
     "/contact",
@@ -33,7 +34,9 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // ✅ Allow access if token exists
+  // ✅ Allow access if token exists (validation happens in components)
+  // Note: We don't validate the token here to avoid blocking on every request
+  // Components will handle 401 responses and redirect appropriately
   return NextResponse.next();
 }
 

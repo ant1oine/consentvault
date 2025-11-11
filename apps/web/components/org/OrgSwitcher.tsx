@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { apiFetch } from "@/lib/api";
+import { getMe } from "@/lib/api";
 
 export default function OrgSwitcher() {
   const [orgs, setOrgs] = useState<{ org_id: string; role: string }[]>([]);
@@ -12,7 +12,7 @@ export default function OrgSwitcher() {
   useEffect(() => {
     async function loadOrgs() {
       try {
-        const me = await apiFetch("/auth/me");
+        const me = await getMe();
         setOrgs(me.orgs || []);
         const stored = localStorage.getItem("active_org_id");
         if (stored) setActiveOrg(stored);

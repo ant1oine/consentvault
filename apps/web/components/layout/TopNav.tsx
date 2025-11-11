@@ -12,6 +12,14 @@ import {
 
 export default function TopNav() {
   const { logout, user } = useAuth();
+  
+  // Determine user role: Superadmin > Admin > Member
+  const userRole = user?.is_superadmin
+    ? "Superadmin"
+    : user?.orgs?.[0]?.role === "admin"
+    ? "Admin"
+    : "Member";
+  const userName = user?.email?.split("@")[0] || "Admin";
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur-md">
@@ -34,9 +42,12 @@ export default function TopNav() {
           <DropdownMenu>
             <DropdownMenuTrigger className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 transition-all">
               <User className="h-4 w-4" />
-              <span>{user?.email?.split("@")[0] || "Admin"}</span>
+              <span>{userName}</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
+              <div className="px-2 py-1.5 text-xs text-slate-500 border-b border-slate-100">
+                {userRole}
+              </div>
               <DropdownMenuItem>Profile</DropdownMenuItem>
               <DropdownMenuItem>Settings</DropdownMenuItem>
               <DropdownMenuItem onClick={logout} className="text-red-600">

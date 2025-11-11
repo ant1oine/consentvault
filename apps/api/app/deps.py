@@ -9,6 +9,7 @@ from app.db import Org, OrgUser, User, get_db
 from app.security import verify_token
 
 security = HTTPBearer()
+security_optional = HTTPBearer(auto_error=False)
 
 
 def get_org_by_api_key(
@@ -33,6 +34,31 @@ def get_org_by_api_key(
         )
 
     return org
+
+
+def get_current_user_optional(
+    token: HTTPAuthorizationCredentials | None = Depends(security_optional),
+    db: Session = Depends(get_db),
+) -> User | None:
+    """Get current authenticated user from JWT token (optional - returns None if no token)."""
+    if not token:
+        return None
+    try:
+        payload = verify_token(token.credentials)
+    except Exception:
+        return None
+
+    user_id_str = payload.get("sub")
+    if not user_id_str:
+        return None
+
+    try:
+        user_id = UUID(user_id_str)
+    except (ValueError, TypeError):
+        return None
+
+    user = db.query(User).filter(User.id == user_id).first()
+    return user
 
 
 def get_current_user(

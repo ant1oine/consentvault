@@ -15,11 +15,20 @@ dev-reset:
 	docker compose -f docker-compose.dev.yml build
 	docker compose -f docker-compose.dev.yml up -d
 	@echo "⏳ Waiting for services to be ready..."
-	sleep 10
-	@echo "🔄 Applying Alembic migrations to initialize schema (empty DB)..."
-	docker compose -f docker-compose.dev.yml exec api alembic upgrade head || true
-	@echo "🧹 Database fully reset — no users, orgs, or data exist."
-	@echo "👉 Use 'make create-user EMAIL=you@example.com PASSWORD=secret123 SUPERADMIN=true' to add a new superadmin manually."
+	sleep 15
+	@echo "🛑 Stopping API to prevent init_db() from creating tables..."
+	docker compose -f docker-compose.dev.yml stop api || true
+	@echo "🔻 Dropping all existing tables..."
+	@until docker compose -f docker-compose.dev.yml exec db pg_isready -U consentvault > /dev/null 2>&1; do sleep 1; done
+	docker compose -f docker-compose.dev.yml exec db psql -U consentvault -d consentvault -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" || true
+	@echo "🔄 Reapplying Alembic migrations..."
+	docker compose -f docker-compose.dev.yml run --rm api alembic upgrade head || true
+	@echo "▶️  Restarting API..."
+	docker compose -f docker-compose.dev.yml start api || docker compose -f docker-compose.dev.yml up -d api
+	@echo "🔍 Verifying schema..."
+	docker compose -f docker-compose.dev.yml exec api python -c "from app.db import SessionLocal, Org, User, Consent; db = SessionLocal(); org_count = db.query(Org).count(); user_count = db.query(User).count(); consent_count = db.query(Consent).count(); print(f'✅ DB verified: {org_count} orgs, {user_count} users, {consent_count} consents'); db.close()" || true
+	@echo "✅ Database fully reset — clean schema, no users, orgs, or data exist."
+	@echo "👉 Next step: run 'make create-user EMAIL=admin@consentvault.ae PASSWORD=SuperSecure123 SUPERADMIN=true' to add your superadmin manually."
 
 # Create first admin user for local testing
 create-user:

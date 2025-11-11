@@ -3,16 +3,19 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { getAccessToken, getActiveOrgId, setActiveOrgId, clearAuth } from "@/lib/auth";
-import { apiFetch, AuthError } from "@/lib/api";
+import { getMe, AuthError } from "@/lib/api";
 
 interface Org {
   org_id: string;
+  id?: string; // For compatibility
+  name?: string;
   role: string;
 }
 
 interface User {
   email: string;
   orgs: Org[];
+  is_superadmin?: boolean;
 }
 
 interface AuthContextType {
@@ -27,35 +30,52 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Maximum loading timeout (3 seconds)
+const MAX_LOADING_TIMEOUT = 3000;
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [activeOrgId, setActiveOrgIdState] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadingTimeout, setLoadingTimeout] = useState<NodeJS.Timeout | null>(null);
 
   const refreshUser = useCallback(async () => {
     const token = getAccessToken();
     if (!token) {
       setUser(null);
+      setActiveOrgIdState(null);
       setIsLoading(false);
       return;
     }
 
     try {
-      const me = await apiFetch("/auth/me");
+      const me = await getMe();
       setUser(me);
 
       // Set active org if not already set
       const storedOrgId = getActiveOrgId();
       if (me.orgs?.length > 0) {
-        if (storedOrgId && me.orgs.some((org) => org.org_id === storedOrgId)) {
+        if (storedOrgId && me.orgs.some((org) => org.org_id === storedOrgId || org.id === storedOrgId)) {
           setActiveOrgIdState(storedOrgId);
         } else {
-          const firstOrgId = me.orgs[0].org_id;
-          setActiveOrgIdState(firstOrgId);
-          setActiveOrgId(firstOrgId);
+          const firstOrgId = me.orgs[0].org_id || me.orgs[0].id;
+          if (firstOrgId) {
+            setActiveOrgIdState(firstOrgId);
+            setActiveOrgId(firstOrgId);
+          }
+        }
+      } else {
+        // No orgs - clear active org
+        setActiveOrgIdState(null);
+        // If user has no orgs and is not superadmin, redirect to create-org
+        if (!me.is_superadmin) {
+          // Don't redirect immediately - let the component handle it
+          // This allows the dashboard to show "no org" message
         }
       }
+      
+      setIsLoading(false);
     } catch (error) {
       // If it's an AuthError, the apiFetch already cleared auth and dispatched the event
       // So we just need to update local state - the event handler will redirect
@@ -76,6 +96,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
   }, [router]);
+
+  // Set loading timeout on mount
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (isLoading) {
+        console.warn("Auth loading timeout - forcing loading to false");
+        setIsLoading(false);
+      }
+    }, MAX_LOADING_TIMEOUT);
+    
+    setLoadingTimeout(timeout);
+    
+    return () => {
+      if (timeout) clearTimeout(timeout);
+    };
+  }, []);
 
   useEffect(() => {
     refreshUser();
