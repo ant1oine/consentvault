@@ -62,15 +62,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error instanceof AuthError) {
         setUser(null);
         setActiveOrgIdState(null);
+        setIsLoading(false);
+        // Immediately redirect to login
+        router.replace("/login");
       } else {
         // For other errors, log and clear auth manually
         console.error("Failed to fetch user:", error);
         clearAuth();
         setUser(null);
+        setActiveOrgIdState(null);
+        setIsLoading(false);
         router.replace("/login");
       }
-    } finally {
-      setIsLoading(false);
     }
   }, [router]);
 

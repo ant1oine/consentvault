@@ -1,5 +1,5 @@
-"""Consent router."""
-from datetime import UTC, datetime
+"""Legacy consent router for dashboard (JWT auth) and widget (public)."""
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -7,30 +7,30 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
 from app.db import Consent, Org, get_db
-from app.deps import get_current_org, get_org_by_api_key, require_role
+from app.deps import get_current_org, require_role
 from app.schemas import ConsentCreate, ConsentOut
 from app.security import compute_version_hash
-from app.services.audit_service import log_action
 
-router = APIRouter(prefix="/v1/consents", tags=["Consents"])
+router = APIRouter(prefix="/consents", tags=["Consents"])
 
 
 @router.post("", response_model=ConsentOut, status_code=status.HTTP_201_CREATED)
-def create_consent(
+def create_consent_legacy(
     consent_data: ConsentCreate,
+    org_id: UUID = Query(..., alias="org_id"),
     request: Request = None,
-    org: Org = Depends(get_org_by_api_key),
     db: Session = Depends(get_db),
 ):
     """
-    Create consent record (requires API key in Authorization header).
-    Automatically attaches org_id from API key.
+    Create consent record (public endpoint for widget usage).
+    Requires org_id in query param.
     """
-    # Validate status
-    if consent_data.status not in ("granted", "revoked"):
+    # Verify org exists
+    org = db.query(Org).filter(Org.id == org_id).first()
+    if not org:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Status must be 'granted' or 'revoked'",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organization not found",
         )
 
     # Get IP and user agent from request
@@ -45,24 +45,17 @@ def create_consent(
     ip = consent_data.ip or ip
     user_agent = consent_data.user_agent or user_agent
 
-    # Default text if not provided
-    text = consent_data.text or f"Consent for {consent_data.purpose}"
-
     # Compute version hash
-    version_hash = compute_version_hash(consent_data.purpose, text)
-
-    # Set revoked_at if status is revoked
-    revoked_at = datetime.now(UTC) if consent_data.status == "revoked" else None
+    version_hash = compute_version_hash(consent_data.purpose, consent_data.text)
 
     consent = Consent(
-        org_id=org.id,
-        subject_email=consent_data.subject_email,
+        org_id=org_id,
+        subject_id=consent_data.subject_id,
         purpose=consent_data.purpose,
-        text=text,
+        text=consent_data.text,
         version_hash=version_hash,
         ip=ip,
         user_agent=user_agent,
-        revoked_at=revoked_at,
         metadata_json=consent_data.metadata or {},
     )
 
@@ -70,41 +63,26 @@ def create_consent(
     db.commit()
     db.refresh(consent)
 
-    # Log audit action
-    log_action(
-        org_id=org.id,
-        user_email=None,  # API key auth, no user email
-        action="created",
-        entity_type="consent",
-        entity_id=consent.id,
-        metadata={
-            "subject_email": consent.subject_email,
-            "purpose": consent.purpose,
-            "status": consent_data.status,
-        },
-    )
-
     return consent
 
 
 @router.get("", response_model=list[ConsentOut])
 def list_consents(
+    org_id: UUID = Query(...),
     subject_id: str | None = Query(None),
-    subject_email: str | None = Query(None),
     purpose: str | None = Query(None),
     from_date: datetime | None = Query(None),
     to_date: datetime | None = Query(None),
     q: str | None = Query(None),
-    org: Org = Depends(get_org_by_api_key),
+    current_org: Org = Depends(get_current_org),
+    _membership = Depends(require_role("viewer")),
     db: Session = Depends(get_db),
 ):
-    """List consents with filters (requires API key)."""
-    query = db.query(Consent).filter(Consent.org_id == org.id)
+    """List consents with filters (viewer+, JWT auth for dashboard)."""
+    query = db.query(Consent).filter(Consent.org_id == current_org.id)
 
     if subject_id:
         query = query.filter(Consent.subject_id == subject_id)
-    if subject_email:
-        query = query.filter(Consent.subject_email == subject_email)
     if purpose:
         query = query.filter(Consent.purpose == purpose)
     if from_date:
@@ -115,7 +93,6 @@ def list_consents(
         query = query.filter(
             or_(
                 Consent.subject_id.ilike(f"%{q}%"),
-                Consent.subject_email.ilike(f"%{q}%"),
                 Consent.purpose.ilike(f"%{q}%"),
                 Consent.text.ilike(f"%{q}%"),
             )
@@ -128,13 +105,14 @@ def list_consents(
 @router.post("/{consent_id}/revoke", status_code=status.HTTP_200_OK)
 def revoke_consent(
     consent_id: UUID,
-    org: Org = Depends(get_org_by_api_key),
+    current_org: Org = Depends(get_current_org),
+    _membership = Depends(require_role("editor")),
     db: Session = Depends(get_db),
 ):
-    """Revoke a consent (requires API key)."""
+    """Revoke a consent (editor+, JWT auth for dashboard)."""
     consent = db.query(Consent).filter(
         Consent.id == consent_id,
-        Consent.org_id == org.id,
+        Consent.org_id == current_org.id,
     ).first()
 
     if not consent:
@@ -149,17 +127,8 @@ def revoke_consent(
             detail="Consent already revoked",
         )
 
-    consent.revoked_at = datetime.now(UTC)
+    consent.revoked_at = datetime.utcnow()
     db.commit()
 
-    # Log audit action
-    log_action(
-        org_id=org.id,
-        user_email=None,  # API key auth, no user email
-        action="revoked",
-        entity_type="consent",
-        entity_id=consent.id,
-        metadata={"subject_email": consent.subject_email, "purpose": consent.purpose},
-    )
-
     return {"message": "Consent revoked", "consent_id": str(consent_id)}
+

@@ -1,40 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/components/providers/AuthProvider";
+import { getDashboardSummary } from "@/lib/api";
+import { queryKeys } from "@/lib/queryKeys";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileCheck, RotateCcw, Users, Server, FilePlus } from "lucide-react";
+import { FileCheck, RotateCcw, Users, Server, FilePlus, AlertCircle } from "lucide-react";
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { activeOrgId } = useAuth();
 
-  useEffect(() => {
-    // Calculate stats from consents data
-    apiFetch("/consents?limit=1000")
-      .then((consents: any[]) => {
-        const stats = {
-          consents_total: consents.length,
-          revocations_total: consents.filter((c) => c.revoked_at).length,
-          subjects_total: new Set(consents.map((c) => c.subject_id)).size,
-          api_calls_total: consents.length, // Using consents as proxy for API calls
-        };
-        setStats(stats);
-      })
-      .catch((e) => {
-        console.error("Failed to load stats:", e);
-        setStats({
-          consents_total: 0,
-          revocations_total: 0,
-          subjects_total: 0,
-          api_calls_total: 0,
-        });
-      })
-      .finally(() => setLoading(false));
-  }, []);
+  const { data: summary, isLoading, error } = useQuery({
+    queryKey: queryKeys.dashboardSummary(activeOrgId || ""),
+    queryFn: () => getDashboardSummary(activeOrgId!),
+    enabled: !!activeOrgId,
+  });
 
-  if (loading) {
+  if (isLoading) {
     return (
       <section>
         <div className="mb-4">
@@ -57,7 +40,30 @@ export default function DashboardPage() {
     );
   }
 
-  if (!stats) {
+  if (error) {
+    return (
+      <section>
+        <div className="mb-4">
+          <h2 className="text-2xl font-semibold text-slate-900 tracking-tight">
+            Consent Management Overview
+          </h2>
+          <p className="text-sm text-slate-500">
+            Monitor your organization's consent and compliance activity
+          </p>
+        </div>
+        <div className="rounded-2xl bg-red-50 border border-red-200 shadow-sm p-6 mt-6">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-red-600" />
+            <p className="text-sm text-red-700">
+              Failed to load dashboard data. Please try again later.
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (!summary) {
     return (
       <section>
         <div className="mb-4">
@@ -75,21 +81,28 @@ export default function DashboardPage() {
     );
   }
 
+  const stats = {
+    consents_total: summary.consents_active || 0,
+    revocations_total: summary.revocations || 0,
+    subjects_total: 0, // Not available in summary endpoint
+    api_calls_total: summary.consents_active || 0,
+    dsar_completed: summary.dsar_completed || 0,
+  };
+
   const hasData =
     stats.consents_total > 0 ||
     stats.revocations_total > 0 ||
-    stats.subjects_total > 0 ||
-    stats.api_calls_total > 0;
+    stats.dsar_completed > 0;
 
   const cards = [
-    { label: "Consents", href: "/consents", Icon: FileCheck, value: stats.consents_total },
+    { label: "Active Consents", href: "/consents", Icon: FileCheck, value: stats.consents_total },
     {
       label: "Revocations",
       href: "/consents?tab=revocations",
       Icon: RotateCcw,
       value: stats.revocations_total,
     },
-    { label: "Subjects", href: "/consents?tab=subjects", Icon: Users, value: stats.subjects_total },
+    { label: "DSAR Completed", href: "/data-rights", Icon: Users, value: stats.dsar_completed },
     { label: "API Calls", href: "/api-logs", Icon: Server, value: stats.api_calls_total },
   ];
 
@@ -99,7 +112,7 @@ export default function DashboardPage() {
         Consent Management Overview
       </h2>
       <p className="text-sm text-slate-500">
-        Monitor your organization's consent and compliance activity
+        {summary.org ? `Organization: ${summary.org}` : "Monitor your organization's consent and compliance activity"}
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mt-6">

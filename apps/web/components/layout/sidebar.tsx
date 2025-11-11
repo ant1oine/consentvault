@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Activity, FileCheck, UserCog } from "lucide-react";
+import { LayoutDashboard, Activity, FileCheck, UserCog, History, ShieldCheck } from "lucide-react";
 
 function SidebarLink({
   icon: Icon,
@@ -51,6 +51,12 @@ export default function Sidebar() {
           href="/api-logs"
           isActive={pathname === "/api-logs"}
         />
+        <SidebarLink
+          icon={History}
+          label="Activity"
+          href="/activity"
+          isActive={pathname === "/activity"}
+        />
 
         <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-3 mt-4">
           Governance
@@ -62,7 +68,7 @@ export default function Sidebar() {
           isActive={pathname === "/consents"}
         />
         <SidebarLink
-          icon={UserCog}
+          icon={ShieldCheck}
           label="Data Rights"
           href="/data-rights"
           isActive={pathname === "/data-rights"}

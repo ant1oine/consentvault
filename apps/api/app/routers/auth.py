@@ -10,7 +10,7 @@ from app.deps import get_current_user
 from app.schemas import LoginRequest, TokenResponse
 from app.security import create_access_token, hash_password, verify_password
 
-router = APIRouter(prefix="/auth", tags=["Auth"])
+router = APIRouter(tags=["Auth"])
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -30,7 +30,16 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
             detail="Incorrect email or password",
         )
 
-    # Get user's org memberships
+    # Superadmin login - no org validation needed
+    if user.is_superadmin:
+        access_token_expires = timedelta(minutes=30)
+        access_token = create_access_token(
+            data={"sub": str(user.id), "email": user.email, "is_superadmin": True},
+            expires_delta=access_token_expires,
+        )
+        return TokenResponse(access_token=access_token)
+
+    # Regular user login - get user's org memberships
     memberships = db.query(OrgUser).filter(OrgUser.user_id == user.id).all()
     org_ids = [str(m.org_id) for m in memberships]
 
@@ -49,11 +58,21 @@ def get_current_user_info(
     db: Session = Depends(get_db),
 ):
     """Get current authenticated user information with org memberships."""
+    # Superadmin doesn't need org memberships
+    if current_user.is_superadmin:
+        return {
+            "id": current_user.id,
+            "email": current_user.email,
+            "is_superadmin": True,
+            "orgs": [],
+        }
+
     memberships = db.query(OrgUser).filter(OrgUser.user_id == current_user.id).all()
 
     return {
         "id": current_user.id,
         "email": current_user.email,
+        "is_superadmin": False,
         "orgs": [
             {
                 "org_id": str(m.org_id),

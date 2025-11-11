@@ -1,14 +1,25 @@
 """Organization router."""
+import secrets
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 from sqlalchemy.orm import Session
 
-from app.db import Org, OrgUser, User, get_db
+from app.db import Org, OrgMember, OrgUser, User, get_db
 from app.deps import get_current_user, require_role
-from app.schemas import OrgCreate, OrgOut, OrgUserCreate
+from app.schemas import OrgCreate, OrgDetailOut, OrgOut, OrgUserCreate
+from app.services.audit_service import log_action
 
-router = APIRouter(prefix="/orgs", tags=["Organizations"])
+router = APIRouter(prefix="/v1/orgs", tags=["Organizations"])
+
+
+@router.get("", response_model=list[OrgOut])
+def list_orgs(
+    db: Session = Depends(get_db),
+):
+    """List all organizations."""
+    orgs = db.query(Org).all()
+    return orgs
 
 
 @router.post("", response_model=OrgOut, status_code=status.HTTP_201_CREATED)
@@ -17,24 +28,93 @@ def create_org(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Create organization and auto-add creator as admin."""
-    org = Org(name=org_data.name)
-    db.add(org)
-    db.flush()
+    """Create organization with auto-generated API key."""
+    # Generate secure API key
+    api_key = secrets.token_hex(16)
 
-    # Add creator as admin
-    membership = OrgUser(org_id=org.id, user_id=current_user.id, role="admin")
-    db.add(membership)
+    org = Org(
+        name=org_data.name,
+        region=org_data.region,
+        api_key=api_key,
+    )
+    db.add(org)
     db.commit()
     db.refresh(org)
 
+    # Log audit action
+    log_action(
+        org_id=org.id,
+        user_email=current_user.email if current_user else None,
+        action="created",
+        entity_type="org",
+        entity_id=org.id,
+        metadata={"name": org.name, "region": org.region},
+    )
+
     return org
+
+
+@router.get("/{org_id}", response_model=OrgDetailOut)
+def get_org(
+    org_id: UUID = Path(...),
+    db: Session = Depends(get_db),
+):
+    """Get organization details with users."""
+    org = db.query(Org).filter(Org.id == org_id).first()
+    if not org:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organization not found",
+        )
+
+    # Get org members
+    members = db.query(OrgMember).filter(OrgMember.org_id == org_id).all()
+
+    return OrgDetailOut(
+        id=org.id,
+        name=org.name,
+        region=org.region,
+        api_key=org.api_key,
+        created_at=org.created_at,
+        users=members,
+    )
+
+
+@router.delete("/{org_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_org(
+    org_id: UUID = Path(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete organization (cascades to users)."""
+    org = db.query(Org).filter(Org.id == org_id).first()
+    if not org:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organization not found",
+        )
+
+    # Log audit action before deletion
+    log_action(
+        org_id=org_id,
+        user_email=current_user.email if current_user else None,
+        action="deleted",
+        entity_type="org",
+        entity_id=org_id,
+        metadata={"name": org.name},
+    )
+
+    db.delete(org)
+    db.commit()
+
+    return None
 
 
 @router.post("/{org_id}/users", status_code=status.HTTP_201_CREATED)
 def add_user_to_org(
     org_id: UUID = Path(..., description="Organization ID from path"),
     user_data: OrgUserCreate = None,
+    current_user: User = Depends(get_current_user),
     _membership: OrgUser = Depends(require_role("admin")),
     db: Session = Depends(get_db),
 ):
@@ -77,6 +157,19 @@ def add_user_to_org(
     membership = OrgUser(org_id=org_id, user_id=user_data.user_id, role=user_data.role)
     db.add(membership)
     db.commit()
+
+    # Log audit action
+    log_action(
+        org_id=org_id,
+        user_email=current_user.email if current_user else None,
+        action="added_user",
+        entity_type="org_user",
+        entity_id=membership.id,
+        metadata={
+            "user_id": str(user_data.user_id),
+            "role": user_data.role,
+        },
+    )
 
     return {
         "message": "User added to organization",

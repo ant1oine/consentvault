@@ -1,31 +1,37 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useAuth } from "@/components/providers/AuthProvider";
+import { getConsents, getOrgDetails } from "@/lib/api";
+import { queryKeys } from "@/lib/queryKeys";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Download } from "lucide-react";
+import { Download, AlertCircle } from "lucide-react";
 
 export default function ConsentsPage() {
-  const [consents, setConsents] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { activeOrgId } = useAuth();
   const [search, setSearch] = useState("");
 
-  useEffect(() => {
-    apiFetch("/consents?limit=200")
-      .then((data: any[]) => {
-        setConsents(data);
-      })
-      .catch((e) => {
-        console.error("Failed to load consents:", e);
-        setConsents([]);
-      })
-      .finally(() => setLoading(false));
-  }, []);
+  // First, fetch org details to get the API key
+  const { data: orgDetails, isLoading: isLoadingOrg } = useQuery({
+    queryKey: queryKeys.orgDetails(activeOrgId || ""),
+    queryFn: () => getOrgDetails(activeOrgId!),
+    enabled: !!activeOrgId,
+  });
+
+  // Then fetch consents using the API key
+  const { data: consents = [], isLoading: isLoadingConsents, error } = useQuery({
+    queryKey: queryKeys.consents({ apiKey: orgDetails?.api_key }),
+    queryFn: () => getConsents(orgDetails?.api_key),
+    enabled: !!orgDetails?.api_key,
+  });
+
+  const isLoading = isLoadingOrg || isLoadingConsents;
 
   const filtered = consents.filter(
-    (c) =>
+    (c: any) =>
       c.subject_id?.toLowerCase().includes(search.toLowerCase()) ||
       c.purpose?.toLowerCase().includes(search.toLowerCase())
   );
@@ -33,7 +39,7 @@ export default function ConsentsPage() {
   const exportCSV = () => {
     const csv = [
       ["subject_id", "purpose", "accepted_at", "revoked_at"],
-      ...filtered.map((c) => [
+      ...filtered.map((c: any) => [
         c.subject_id || "",
         c.purpose || "",
         c.accepted_at ? new Date(c.accepted_at).toISOString() : "",
@@ -50,7 +56,7 @@ export default function ConsentsPage() {
     a.click();
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <section>
         <div className="mb-4">
@@ -65,6 +71,23 @@ export default function ConsentsPage() {
     );
   }
 
+  if (error) {
+    return (
+      <section>
+        <h2 className="text-2xl font-semibold text-slate-900 tracking-tight">Consents</h2>
+        <p className="text-sm text-slate-500 mb-4">View and manage user consent records.</p>
+        <div className="rounded-2xl bg-red-50 border border-red-200 shadow-sm p-6">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-red-600" />
+            <p className="text-sm text-red-700">
+              Failed to load consents. Please try again later.
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section>
       <h2 className="text-2xl font-semibold text-slate-900 tracking-tight">Consents</h2>
@@ -74,15 +97,17 @@ export default function ConsentsPage() {
         <div className="p-5 border-b border-slate-200 bg-slate-50">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-medium text-slate-800">Consent Records</h3>
-            <Button
-              onClick={exportCSV}
-              variant="outline"
-              size="sm"
-              className="focus-visible:ring-2 focus-visible:ring-blue-500"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Export CSV
-            </Button>
+            {filtered.length > 0 && (
+              <Button
+                onClick={exportCSV}
+                variant="outline"
+                size="sm"
+                className="focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export CSV
+              </Button>
+            )}
           </div>
           <div className="mb-4">
             <Input
@@ -97,7 +122,9 @@ export default function ConsentsPage() {
 
         {filtered.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-sm text-slate-500">No consent records found.</p>
+            <p className="text-sm text-slate-500">
+              {search ? "No consent records match your search." : "No consent records found."}
+            </p>
           </div>
         ) : (
           <table className="min-w-full text-sm">
@@ -110,7 +137,7 @@ export default function ConsentsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 odd:bg-slate-50 hover:bg-slate-50 transition-all">
-              {filtered.map((c) => (
+              {filtered.map((c: any) => (
                 <tr key={c.id} className="hover:bg-slate-50 transition-all">
                   <td className="px-4 py-3">
                     <span className="font-mono text-xs text-slate-700">{c.subject_id}</span>

@@ -2,7 +2,7 @@
 from uuid import UUID
 
 from fastapi import Depends, Header, HTTPException, Query, status
-from fastapi.security import HTTPBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from app.db import Org, OrgUser, User, get_db
@@ -11,8 +11,32 @@ from app.security import verify_token
 security = HTTPBearer()
 
 
+def get_org_by_api_key(
+    x_api_key: str | None = Header(None, alias="X-API-Key"),
+    db: Session = Depends(get_db),
+) -> Org:
+    """
+    Validates organization based on provided X-API-Key header.
+    Used by consent/data-rights/audit endpoints.
+    """
+    if not x_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing API key",
+        )
+
+    org = db.query(Org).filter(Org.api_key == x_api_key).first()
+    if not org:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key",
+        )
+
+    return org
+
+
 def get_current_user(
-    token: str = Depends(security),
+    token: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db),
 ) -> User:
     """Get current authenticated user from JWT token."""
@@ -59,6 +83,8 @@ def get_current_org(
     Get current organization from either:
     - X-Org-ID header (preferred)
     - or ?org_id query param (fallback)
+    
+    Superadmins can access any org without membership validation.
     """
     target_org_id = org_id_header or org_id_query
     if not target_org_id:
@@ -66,6 +92,16 @@ def get_current_org(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Organization ID required via X-Org-ID header or ?org_id query param",
         )
+
+    # Superadmins can access any org
+    if current_user.is_superadmin:
+        org = db.query(Org).filter(Org.id == target_org_id).first()
+        if not org:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Organization not found",
+            )
+        return org
 
     # Verify user membership in org
     membership = (
@@ -98,6 +134,17 @@ def require_role(required_role: str):
         db: Session = Depends(get_db),
     ) -> OrgUser:
         """Ensure the user has at least the specified role in the current org."""
+        # Superadmins bypass role checks
+        if current_user.is_superadmin:
+            # Return a dummy OrgUser-like object for superadmins
+            # This allows endpoints to work but superadmins have full access
+            class SuperadminMembership:
+                def __init__(self):
+                    self.org_id = current_org.id
+                    self.user_id = current_user.id
+                    self.role = "admin"
+            return SuperadminMembership()
+
         membership = (
             db.query(OrgUser)
             .filter(

@@ -27,12 +27,13 @@ def print_success(msg):
 
 def main():
     if len(sys.argv) < 3:
-        print_error("Usage: python create_user.py <email> <password> [role]")
+        print_error("Usage: python create_user.py <email> <password> [role] [--superadmin]")
         sys.exit(1)
 
     email = sys.argv[1].strip()
     password = sys.argv[2].strip()
-    role = sys.argv[3].strip() if len(sys.argv) > 3 else None
+    role = sys.argv[3].strip() if len(sys.argv) > 3 and not sys.argv[3].startswith("--") else None
+    is_superadmin = "--superadmin" in sys.argv
 
     db = SessionLocal()
 
@@ -40,6 +41,20 @@ def main():
         print_error(f"User {email} already exists.")
         sys.exit(1)
 
+    if is_superadmin:
+        # Create superadmin user without org membership
+        user = User(
+            email=email,
+            password_hash=hash_password(password),
+            is_superadmin=True
+        )
+        db.add(user)
+        db.commit()
+        print_success(f"Created superadmin user {email}.")
+        db.close()
+        return
+
+    # Regular user creation with org membership
     org = db.query(Org).first()
     if not org:
         org = Org(name="Default Organization")
@@ -62,6 +77,7 @@ def main():
     db.commit()
 
     print_success(f"Created user {email} as {role} in org '{org.name}'.")
+    db.close()
 
 
 if __name__ == "__main__":

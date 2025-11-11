@@ -1,0 +1,66 @@
+name: 🧪 ConsentVault QA
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Run Integration Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: consentvault
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Docker Compose
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docker-compose
+
+      - name: Build and Run Containers
+        run: |
+          docker compose -f docker-compose.dev.yml up -d --build api db
+          sleep 10
+
+      - name: Initialize Database Schema
+        run: docker compose -f docker-compose.dev.yml exec api python -c "from app.db import init_db; init_db()" || true
+
+      - name: Fix Database Schema
+        run: docker compose -f docker-compose.dev.yml exec api python /app/scripts/fix_schema.py || true
+
+      - name: Run Integration Tests
+        run: docker compose -f docker-compose.dev.yml exec api python /app/scripts/test_all.py
+
+      - name: Upload Logs (always run)
+        if: always()
+        run: docker compose -f docker-compose.dev.yml logs > qa_logs.txt
+
+      - name: Upload QA Report Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-report
+          path: qa_logs.txt
+

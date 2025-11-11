@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { setAccessToken, setActiveOrgId } from "@/lib/auth";
+import { setAccessToken, setActiveOrgId, setSessionToken } from "@/lib/auth";
 import { useAuth } from "@/components/providers/AuthProvider";
 
 export default function LoginPage() {
@@ -30,7 +30,7 @@ export default function LoginPage() {
         "http://localhost:8000";
 
       // Login doesn't require a token, so use fetch directly
-      const loginRes = await fetch(`${baseUrl}/auth/login`, {
+      const loginRes = await fetch(`${baseUrl}/v1/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
@@ -41,11 +41,16 @@ export default function LoginPage() {
       }
 
       const loginData = await loginRes.json();
+      
+      // ✅ Save cookie before redirect (use setSessionToken for cookie-specific storage)
+      setSessionToken(loginData.access_token);
+      
+      // Also store in localStorage for client-side access
       setAccessToken(loginData.access_token);
 
       // Fetch org info and store the first org_id
       try {
-        const meRes = await fetch(`${baseUrl}/auth/me`, {
+        const meRes = await fetch(`${baseUrl}/v1/auth/me`, {
           headers: { Authorization: `Bearer ${loginData.access_token}` },
         });
         if (meRes.ok) {
@@ -61,8 +66,11 @@ export default function LoginPage() {
       // Refresh auth state to update the context
       await refreshUser();
       
-      // Navigate to dashboard
-      router.replace("/dashboard");
+      // Wait a bit to ensure cookie is flushed before redirect
+      await new Promise((r) => setTimeout(r, 300));
+      
+      // Navigate to dashboard (redirect after setting token)
+      router.push("/dashboard");
     } catch (err) {
       alert("Invalid credentials");
       setIsSubmitting(false);
