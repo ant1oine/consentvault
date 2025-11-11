@@ -4,15 +4,6 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Download } from "lucide-react";
 
@@ -76,46 +67,42 @@ export default function ApiLogsPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div>
+      <section>
+        <div className="mb-4">
           <Skeleton className="h-8 w-48 mb-2" />
           <Skeleton className="h-4 w-96" />
         </div>
-        <Card>
-          <CardContent className="p-6">
-            <Skeleton className="h-10 w-full mb-4" />
-            <Skeleton className="h-64 w-full" />
-          </CardContent>
-        </Card>
-      </div>
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6">
+          <Skeleton className="h-10 w-full mb-4" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </section>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-800 mb-1">API Logs</h1>
-        <p className="text-sm text-slate-600">Monitor API activity and audit events</p>
+    <section>
+      <div className="mb-4">
+        <h2 className="text-2xl font-semibold text-slate-900 tracking-tight">API Logs</h2>
+        <p className="text-sm text-slate-500">Monitor inbound and outbound API activities.</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>API Activity</CardTitle>
-            <Button onClick={exportCSV} variant="outline" size="sm">
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-slate-200 bg-slate-50">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-medium text-slate-800">API Activity</h3>
+            <Button onClick={exportCSV} variant="outline" size="sm" className="focus-visible:ring-2 focus-visible:ring-blue-500">
               <Download className="h-4 w-4 mr-2" />
               Export CSV
             </Button>
           </div>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-3 mb-4">
+          <div className="flex gap-3">
             <Input
               type="text"
               placeholder="Search endpoint, status, or subject..."
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              className="flex-1 max-w-md"
+              className="flex-1 max-w-md focus-visible:ring-2 focus-visible:ring-blue-500"
             />
             <select
               value={method}
@@ -128,55 +115,58 @@ export default function ApiLogsPage() {
               <option value="DELETE">DELETE</option>
             </select>
           </div>
+        </div>
 
-          {filtered.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-sm text-slate-600">No logs found.</p>
-            </div>
-          ) : (
-            <div className="rounded-lg border border-slate-200 overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Timestamp</TableHead>
-                    <TableHead>Method</TableHead>
-                    <TableHead>Endpoint</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((l) => (
-                    <TableRow key={l.id}>
-                      <TableCell className="text-slate-600">
-                        {l.created_at
-                          ? new Date(l.created_at).toLocaleString()
-                          : "—"}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">{l.method}</TableCell>
-                      <TableCell className="text-slate-600 font-mono text-xs">
-                        {l.endpoint}
-                      </TableCell>
-                      <TableCell>
-                        <span
-                          className={`font-semibold ${
-                            l.status >= 400
-                              ? "text-red-600"
-                              : l.status >= 300
-                              ? "text-yellow-600"
-                              : "text-green-600"
-                          }`}
-                        >
-                          {l.status}
-                        </span>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+        {filtered.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-sm text-slate-500">No logs found.</p>
+          </div>
+        ) : (
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-100 text-slate-600 uppercase text-xs">
+              <tr>
+                <th className="px-4 py-3 text-left">Timestamp</th>
+                <th className="px-4 py-3 text-left">Endpoint</th>
+                <th className="px-4 py-3 text-left">Status</th>
+                <th className="px-4 py-3 text-left">Duration</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filtered.map((l, index) => (
+                <tr
+                  key={l.id}
+                  className={`transition-colors hover:bg-slate-50 ${
+                    index % 2 === 1 ? "bg-slate-50" : ""
+                  }`}
+                >
+                  <td className="px-4 py-3 text-slate-600">
+                    {l.created_at
+                      ? new Date(l.created_at).toLocaleString()
+                      : "—"}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="font-mono text-xs text-slate-700">{l.endpoint}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`font-semibold ${
+                        l.status >= 400
+                          ? "text-red-600"
+                          : l.status >= 300
+                          ? "text-yellow-600"
+                          : "text-green-600"
+                      }`}
+                    >
+                      {l.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-slate-500 text-xs">—</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </section>
   );
 }

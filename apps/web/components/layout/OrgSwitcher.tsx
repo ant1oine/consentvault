@@ -29,12 +29,12 @@ export default function OrgSwitcher() {
   };
 
   return (
-    <div className="flex items-center gap-2">
-      <Building2 className="h-4 w-4 text-slate-400" />
+    <div className="flex items-center gap-2 text-sm text-slate-600">
+      <Building2 className="h-4 w-4 text-blue-600" />
       <select
         value={activeOrgId || ""}
         onChange={handleChange}
-        className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white text-slate-700 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+        className="border-0 bg-transparent text-sm text-slate-600 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded transition-all cursor-pointer"
       >
         {user.orgs.map((org, i) => (
           <option key={org.org_id} value={org.org_id}>

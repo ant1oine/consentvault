@@ -51,6 +51,11 @@ const config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        brand: {
+          blue: '#2563EB',
+          navy: '#1E3A8A',
+          gray: '#F8FAFC',
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -63,6 +68,8 @@ const config = {
         display: ['Inter', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
+        subtle: '0 1px 2px rgba(0,0,0,0.04)',
+        card: '0 2px 6px rgba(0,0,0,0.06)',
         'enterprise': '0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)',
         'enterprise-md': '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
       },

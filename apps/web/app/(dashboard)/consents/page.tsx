@@ -4,15 +4,6 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Download } from "lucide-react";
 
@@ -61,85 +52,96 @@ export default function ConsentsPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div>
+      <section>
+        <div className="mb-4">
           <Skeleton className="h-8 w-48 mb-2" />
           <Skeleton className="h-4 w-96" />
         </div>
-        <Card>
-          <CardContent className="p-6">
-            <Skeleton className="h-10 w-full mb-4" />
-            <Skeleton className="h-64 w-full" />
-          </CardContent>
-        </Card>
-      </div>
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6">
+          <Skeleton className="h-10 w-full mb-4" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </section>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-800 mb-1">Consents</h1>
-        <p className="text-sm text-slate-600">Manage and review consent records</p>
+    <section>
+      <div className="mb-4">
+        <h2 className="text-2xl font-semibold text-slate-900 tracking-tight">Consents</h2>
+        <p className="text-sm text-slate-500">View and manage user consent records.</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Consent Records</CardTitle>
-            <Button onClick={exportCSV} variant="outline" size="sm">
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-slate-200 bg-slate-50">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-medium text-slate-800">Consent Records</h3>
+            <Button onClick={exportCSV} variant="outline" size="sm" className="focus-visible:ring-2 focus-visible:ring-blue-500">
               <Download className="h-4 w-4 mr-2" />
               Export CSV
             </Button>
           </div>
-        </CardHeader>
-        <CardContent>
           <div className="mb-4">
             <Input
               type="text"
               placeholder="Search by subject or purpose..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="max-w-md"
+              className="max-w-md focus-visible:ring-2 focus-visible:ring-blue-500"
             />
           </div>
+        </div>
 
-          {filtered.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-sm text-slate-600">No consent records found.</p>
-            </div>
-          ) : (
-            <div className="rounded-lg border border-slate-200 overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Subject</TableHead>
-                    <TableHead>Purpose</TableHead>
-                    <TableHead>Accepted</TableHead>
-                    <TableHead>Revoked</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((c) => (
-                    <TableRow key={c.id}>
-                      <TableCell className="font-mono text-xs">{c.subject_id}</TableCell>
-                      <TableCell>{c.purpose}</TableCell>
-                      <TableCell className="text-slate-600">
-                        {c.accepted_at
-                          ? new Date(c.accepted_at).toLocaleString()
-                          : "—"}
-                      </TableCell>
-                      <TableCell className="text-slate-600">
-                        {c.revoked_at ? new Date(c.revoked_at).toLocaleString() : "—"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+        {filtered.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-sm text-slate-500">No consent records found.</p>
+          </div>
+        ) : (
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-100 text-slate-600 uppercase text-xs">
+              <tr>
+                <th className="px-4 py-3 text-left">User</th>
+                <th className="px-4 py-3 text-left">Policy</th>
+                <th className="px-4 py-3 text-left">Status</th>
+                <th className="px-4 py-3 text-left">Last Updated</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filtered.map((c, index) => (
+                <tr
+                  key={c.id}
+                  className={`transition-colors hover:bg-slate-50 ${
+                    index % 2 === 1 ? "bg-slate-50" : ""
+                  }`}
+                >
+                  <td className="px-4 py-3">
+                    <span className="font-mono text-xs text-slate-700">{c.subject_id}</span>
+                  </td>
+                  <td className="px-4 py-3 text-slate-700">{c.purpose}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`px-2.5 py-1 rounded-md text-xs font-medium ${
+                        c.revoked_at
+                          ? "bg-red-50 text-red-700 border border-red-200"
+                          : "bg-green-50 text-green-700 border border-green-200"
+                      }`}
+                    >
+                      {c.revoked_at ? "Revoked" : "Active"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">
+                    {c.revoked_at
+                      ? new Date(c.revoked_at).toLocaleString()
+                      : c.accepted_at
+                      ? new Date(c.accepted_at).toLocaleString()
+                      : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </section>
   );
 }

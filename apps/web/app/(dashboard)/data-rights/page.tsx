@@ -4,15 +4,6 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Download } from "lucide-react";
 
@@ -88,18 +79,16 @@ export default function DataRightsPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div>
+      <section>
+        <div className="mb-4">
           <Skeleton className="h-8 w-48 mb-2" />
           <Skeleton className="h-4 w-96" />
         </div>
-        <Card>
-          <CardContent className="p-6">
-            <Skeleton className="h-10 w-full mb-4" />
-            <Skeleton className="h-64 w-full" />
-          </CardContent>
-        </Card>
-      </div>
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6">
+          <Skeleton className="h-10 w-full mb-4" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </section>
     );
   }
 
@@ -115,69 +104,72 @@ export default function DataRightsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-800 mb-1">Data Rights Requests</h1>
-        <p className="text-sm text-slate-600">Track and manage data subject rights requests</p>
+    <section>
+      <div className="mb-4">
+        <h2 className="text-2xl font-semibold text-slate-900 tracking-tight">Data Rights Requests</h2>
+        <p className="text-sm text-slate-500">Track data access and deletion requests.</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Data Rights Requests</CardTitle>
-            <Button onClick={exportCSV} variant="outline" size="sm">
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-slate-200 bg-slate-50">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-medium text-slate-800">Data Rights Requests</h3>
+            <Button onClick={exportCSV} variant="outline" size="sm" className="focus-visible:ring-2 focus-visible:ring-blue-500">
               <Download className="h-4 w-4 mr-2" />
               Export CSV
             </Button>
           </div>
-        </CardHeader>
-        <CardContent>
           <div className="mb-4">
             <Input
               type="text"
               placeholder="Search by subject or type..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="max-w-md"
+              className="max-w-md focus-visible:ring-2 focus-visible:ring-blue-500"
             />
           </div>
+        </div>
 
-          {filtered.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-sm text-slate-600">No data rights requests found.</p>
-            </div>
-          ) : (
-            <div className="rounded-lg border border-slate-200 overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Subject</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Requested</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell className="font-mono text-xs">{r.subject_id}</TableCell>
-                      <TableCell className="capitalize">{r.request_type}</TableCell>
-                      <TableCell>
-                        <span className={getStatusBadge(r.status)}>{r.status}</span>
-                      </TableCell>
-                      <TableCell className="text-slate-600">
-                        {r.created_at
-                          ? new Date(r.created_at).toLocaleString()
-                          : "—"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+        {filtered.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-sm text-slate-500">No data rights requests found.</p>
+          </div>
+        ) : (
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-100 text-slate-600 uppercase text-xs">
+              <tr>
+                <th className="px-4 py-3 text-left">Requester</th>
+                <th className="px-4 py-3 text-left">Type</th>
+                <th className="px-4 py-3 text-left">Status</th>
+                <th className="px-4 py-3 text-left">Updated</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filtered.map((r, index) => (
+                <tr
+                  key={r.id}
+                  className={`transition-colors hover:bg-slate-50 ${
+                    index % 2 === 1 ? "bg-slate-50" : ""
+                  }`}
+                >
+                  <td className="px-4 py-3">
+                    <span className="font-mono text-xs text-slate-700">{r.subject_id}</span>
+                  </td>
+                  <td className="px-4 py-3 text-slate-700 capitalize">{r.request_type}</td>
+                  <td className="px-4 py-3">
+                    <span className={getStatusBadge(r.status)}>{r.status}</span>
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">
+                    {r.created_at
+                      ? new Date(r.created_at).toLocaleString()
+                      : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </section>
   );
 }
