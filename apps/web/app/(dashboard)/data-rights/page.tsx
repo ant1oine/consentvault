@@ -2,6 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Download } from "lucide-react";
 
 export default function DataRightsPage() {
   const [requests, setRequests] = useState<any[]>([]);
@@ -75,73 +88,96 @@ export default function DataRightsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-gray-600">Loading data rights requests...</p>
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-8 w-48 mb-2" />
+          <Skeleton className="h-4 w-96" />
+        </div>
+        <Card>
+          <CardContent className="p-6">
+            <Skeleton className="h-10 w-full mb-4" />
+            <Skeleton className="h-64 w-full" />
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
+  const getStatusBadge = (status: string) => {
+    const baseClasses = "px-2.5 py-1 rounded-md text-xs font-medium";
+    if (status === "completed") {
+      return `${baseClasses} bg-green-50 text-green-700 border border-green-200`;
+    } else if (status === "failed") {
+      return `${baseClasses} bg-red-50 text-red-700 border border-red-200`;
+    } else {
+      return `${baseClasses} bg-yellow-50 text-yellow-700 border border-yellow-200`;
+    }
+  };
+
   return (
-    <div>
-      <h1 className="text-2xl font-semibold mb-4">Data Rights Requests</h1>
-      <div className="flex gap-2 mb-4">
-        <input
-          type="text"
-          placeholder="Search by subject or type..."
-          className="border rounded-md px-3 py-2 flex-1"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <button
-          onClick={exportCSV}
-          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
-        >
-          Export CSV
-        </button>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-lg font-semibold text-slate-800 mb-1">Data Rights Requests</h1>
+        <p className="text-sm text-slate-600">Track and manage data subject rights requests</p>
       </div>
 
-      {filtered.length === 0 ? (
-        <p className="text-gray-600">No data rights requests found.</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border border-gray-300">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="p-2 text-left border">Subject</th>
-                <th className="p-2 text-left border">Type</th>
-                <th className="p-2 text-left border">Status</th>
-                <th className="p-2 text-left border">Requested</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((r) => (
-                <tr key={r.id} className="border-t hover:bg-gray-50">
-                  <td className="p-2 border font-mono text-xs">{r.subject_id}</td>
-                  <td className="p-2 border capitalize">{r.request_type}</td>
-                  <td className="p-2 border">
-                    <span
-                      className={`px-2 py-1 rounded text-xs font-medium ${
-                        r.status === "completed"
-                          ? "bg-green-100 text-green-700"
-                          : r.status === "failed"
-                          ? "bg-red-100 text-red-700"
-                          : "bg-yellow-100 text-yellow-700"
-                      }`}
-                    >
-                      {r.status}
-                    </span>
-                  </td>
-                  <td className="p-2 border text-gray-600">
-                    {r.created_at
-                      ? new Date(r.created_at).toLocaleString()
-                      : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Data Rights Requests</CardTitle>
+            <Button onClick={exportCSV} variant="outline" size="sm">
+              <Download className="h-4 w-4 mr-2" />
+              Export CSV
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-4">
+            <Input
+              type="text"
+              placeholder="Search by subject or type..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="max-w-md"
+            />
+          </div>
+
+          {filtered.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-sm text-slate-600">No data rights requests found.</p>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-slate-200 overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Subject</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Requested</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell className="font-mono text-xs">{r.subject_id}</TableCell>
+                      <TableCell className="capitalize">{r.request_type}</TableCell>
+                      <TableCell>
+                        <span className={getStatusBadge(r.status)}>{r.status}</span>
+                      </TableCell>
+                      <TableCell className="text-slate-600">
+                        {r.created_at
+                          ? new Date(r.created_at).toLocaleString()
+                          : "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

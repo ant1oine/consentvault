@@ -2,6 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Download } from "lucide-react";
 
 export default function ApiLogsPage() {
   const [logs, setLogs] = useState<any[]>([]);
@@ -63,80 +76,107 @@ export default function ApiLogsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-gray-600">Loading API logs...</p>
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-8 w-48 mb-2" />
+          <Skeleton className="h-4 w-96" />
+        </div>
+        <Card>
+          <CardContent className="p-6">
+            <Skeleton className="h-10 w-full mb-4" />
+            <Skeleton className="h-64 w-full" />
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold mb-4">API Logs</h1>
-
-      <div className="flex gap-2 mb-4">
-        <input
-          type="text"
-          placeholder="Search endpoint, status, or subject..."
-          className="border rounded-md px-3 py-2 flex-1"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-        />
-        <select
-          className="border rounded-md px-3 py-2 bg-white"
-          value={method}
-          onChange={(e) => setMethod(e.target.value)}
-        >
-          <option value="ALL">All Methods</option>
-          <option value="GET">GET</option>
-          <option value="POST">POST</option>
-          <option value="DELETE">DELETE</option>
-        </select>
-        <button
-          onClick={exportCSV}
-          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
-        >
-          Export CSV
-        </button>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-lg font-semibold text-slate-800 mb-1">API Logs</h1>
+        <p className="text-sm text-slate-600">Monitor API activity and audit events</p>
       </div>
 
-      {filtered.length === 0 ? (
-        <p className="text-gray-600">No logs found.</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border border-gray-300">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="p-2 text-left border">Timestamp</th>
-                <th className="p-2 text-left border">Method</th>
-                <th className="p-2 text-left border">Endpoint</th>
-                <th className="p-2 text-left border">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((l) => (
-                <tr key={l.id} className="border-t hover:bg-gray-50">
-                  <td className="p-2 border text-gray-600">
-                    {l.created_at
-                      ? new Date(l.created_at).toLocaleString()
-                      : "—"}
-                  </td>
-                  <td className="p-2 border font-mono text-xs">{l.method}</td>
-                  <td className="p-2 border text-gray-600 font-mono text-xs">
-                    {l.endpoint}
-                  </td>
-                  <td
-                    className={`p-2 border font-semibold ${
-                      l.status >= 400 ? "text-red-500" : "text-green-600"
-                    }`}
-                  >
-                    {l.status}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>API Activity</CardTitle>
+            <Button onClick={exportCSV} variant="outline" size="sm">
+              <Download className="h-4 w-4 mr-2" />
+              Export CSV
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-3 mb-4">
+            <Input
+              type="text"
+              placeholder="Search endpoint, status, or subject..."
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              className="flex-1 max-w-md"
+            />
+            <select
+              value={method}
+              onChange={(e) => setMethod(e.target.value)}
+              className="flex h-10 w-[180px] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:border-blue-500 hover:border-slate-300 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="ALL">All Methods</option>
+              <option value="GET">GET</option>
+              <option value="POST">POST</option>
+              <option value="DELETE">DELETE</option>
+            </select>
+          </div>
+
+          {filtered.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-sm text-slate-600">No logs found.</p>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-slate-200 overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Timestamp</TableHead>
+                    <TableHead>Method</TableHead>
+                    <TableHead>Endpoint</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((l) => (
+                    <TableRow key={l.id}>
+                      <TableCell className="text-slate-600">
+                        {l.created_at
+                          ? new Date(l.created_at).toLocaleString()
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">{l.method}</TableCell>
+                      <TableCell className="text-slate-600 font-mono text-xs">
+                        {l.endpoint}
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={`font-semibold ${
+                            l.status >= 400
+                              ? "text-red-600"
+                              : l.status >= 300
+                              ? "text-yellow-600"
+                              : "text-green-600"
+                          }`}
+                        >
+                          {l.status}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -41,19 +41,25 @@ consentvault/
 ## ✨ Features
 
 ✅ **Collect Consent Anywhere**  
-Embed a lightweight `<script>` to display a consent prompt on any site or app.
+Embed a lightweight `<script>` widget with customizable consent prompts, subject ID modes (auto or email), and custom event callbacks.
 
 ✅ **View & Export Records**  
-Simple dashboard for listing, searching, and exporting proof (CSV or PDF).
+Dashboard for listing, searching, filtering, and exporting proof in CSV or HTML formats.
 
 ✅ **Role-based Access**  
-Manage users as `Admin`, `Manager`, or `Viewer` per organization.
+Manage users as `Admin`, `Editor`, or `Viewer` per organization with granular permissions.
 
 ✅ **Stripe Integration (Optional)**  
-Turn on billing with a single product plan using Stripe Checkout.
+Full Stripe Checkout integration for subscription billing with configurable pricing.
 
 ✅ **Secure by Design**  
-JWT auth, hashed passwords, isolated org access — no extra dependencies.
+JWT auth, hashed passwords, isolated org access, role-based permissions — no extra dependencies.
+
+✅ **Organization Management**  
+Create multiple organizations, switch between them, and manage team members with role assignments.
+
+✅ **Dashboard Analytics**  
+View consent statistics, track revocations, monitor API usage, and audit data rights requests.
 
 ---
 
@@ -75,8 +81,14 @@ make dev
 ```
 
 Visit:
-- **API** → http://localhost:8000/docs
-- **Web** → http://localhost:3000
+- **API Docs** → http://localhost:8000/docs
+- **Dashboard** → http://localhost:3000
+  - Dashboard: Overview with consent statistics
+  - Consents: List, search, and manage consent records
+  - Data Rights: Track data rights requests (access, deletion)
+  - API Logs: Audit trail of API activity
+  - Widget: Generate and test embed code
+  - Billing: Manage Stripe subscription (if configured)
 
 ### 3. Create First User
 
@@ -86,14 +98,23 @@ make create-user EMAIL=admin@example.com PASSWORD=password123
 
 ### 4. Test Widget
 
-Embed this snippet in any HTML file:
+Visit the widget generator at http://localhost:3000/widget to customize and generate embed code, or embed directly:
 
 ```html
 <script src="http://localhost:8000/widget.js" 
         data-org="ORG_ID" 
         data-purpose="marketing" 
-        data-text="I agree to receive updates."></script>
+        data-text="I agree to receive updates."
+        data-subject="auto"></script>
 ```
+
+**Widget Features:**
+- `data-org`: Your organization ID (required)
+- `data-purpose`: Purpose of consent (e.g., "marketing", "analytics")
+- `data-text`: Consent text to display
+- `data-subject`: Subject ID mode - `"auto"` (generates ID) or `"email"` (uses email from form)
+
+The widget dispatches custom events: `consentvault:agreed` and `consentvault:declined` for integration.
 
 ---
 
@@ -132,10 +153,16 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed steps.
 | Method | Route | Description |
 |--------|-------|-------------|
 | POST | `/auth/login` | Login, returns JWT |
+| GET | `/auth/me` | Get current user info with org memberships |
+| POST | `/orgs` | Create organization |
+| POST | `/orgs/{org_id}/users` | Add user to org (admin only) |
 | POST | `/consents` | Create consent record |
-| GET | `/consents` | List consents by org |
-| GET | `/consents/export.csv` | Export CSV |
-| GET | `/widget.js` | Serve embedded widget |
+| GET | `/consents` | List consents with filters (subject, purpose, date range, search) |
+| POST | `/consents/{consent_id}/revoke` | Revoke a consent (editor+) |
+| GET | `/consents/export.csv` | Export consents as CSV |
+| GET | `/consents/export.html` | Export consents as HTML |
+| GET | `/widget.js` | Serve embedded consent widget |
+| GET | `/billing/checkout` | Get Stripe checkout URL for subscription |
 
 Full API documentation available at `/docs` when running locally.
 
@@ -157,11 +184,12 @@ ConsentVault strips it down to what actually matters:
 
 ## 📈 Roadmap
 
-- [ ] Team onboarding flows
-- [ ] Custom widget theming
+- [ ] Custom widget theming and styling
 - [ ] Webhook delivery for consent events
-- [ ] Multi-tenant analytics (Pro tier)
+- [ ] PDF export format
+- [ ] Multi-tenant analytics dashboard
 - [ ] Region-specific data storage (Enterprise)
+- [ ] Email notifications for consent events
 
 ---
 

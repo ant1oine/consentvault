@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<any>(null);
@@ -33,25 +35,44 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-gray-600">Loading overview...</p>
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-8 w-48 mb-6" />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i}>
+              <CardContent className="p-6 text-center">
+                <Skeleton className="h-4 w-24 mx-auto mb-3" />
+                <Skeleton className="h-8 w-16 mx-auto" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
     );
   }
 
   if (!stats) {
     return (
-      <div>
-        <h1 className="text-2xl font-semibold mb-4">Overview</h1>
-        <p className="text-gray-600">No stats found.</p>
+      <div className="space-y-6">
+        <h1 className="text-lg font-semibold text-slate-800">Overview</h1>
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-sm text-slate-600">No stats found.</p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Overview</h1>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div>
+        <h1 className="text-lg font-semibold text-slate-800 mb-1">Overview</h1>
+        <p className="text-sm text-slate-600">Monitor your consent management metrics</p>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
         <StatCard label="Consents" value={stats.consents_total} />
         <StatCard label="Revocations" value={stats.revocations_total} />
         <StatCard label="Subjects" value={stats.subjects_total} />
@@ -63,9 +84,11 @@ export default function DashboardPage() {
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="bg-white p-4 border rounded-lg text-center shadow-sm">
-      <p className="text-gray-500 text-sm mb-1">{label}</p>
-      <p className="text-2xl font-semibold text-gray-900">{value.toLocaleString()}</p>
-    </div>
+    <Card>
+      <CardContent className="p-6 text-center">
+        <p className="text-sm text-slate-600 mb-2 font-medium">{label}</p>
+        <p className="text-3xl font-semibold text-slate-800">{value.toLocaleString()}</p>
+      </CardContent>
+    </Card>
   );
 }

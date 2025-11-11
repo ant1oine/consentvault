@@ -2,6 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Download } from "lucide-react";
 
 export default function ConsentsPage() {
   const [consents, setConsents] = useState<any[]>([]);
@@ -48,63 +61,85 @@ export default function ConsentsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-gray-600">Loading consents...</p>
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-8 w-48 mb-2" />
+          <Skeleton className="h-4 w-96" />
+        </div>
+        <Card>
+          <CardContent className="p-6">
+            <Skeleton className="h-10 w-full mb-4" />
+            <Skeleton className="h-64 w-full" />
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold mb-4">Consents</h1>
-      <div className="flex gap-2 mb-4">
-        <input
-          type="text"
-          placeholder="Search by subject or purpose..."
-          className="border rounded-md px-3 py-2 flex-1"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <button
-          onClick={exportCSV}
-          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
-        >
-          Export CSV
-        </button>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-lg font-semibold text-slate-800 mb-1">Consents</h1>
+        <p className="text-sm text-slate-600">Manage and review consent records</p>
       </div>
 
-      {filtered.length === 0 ? (
-        <p className="text-gray-600">No consent records found.</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border border-gray-300">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="p-2 text-left border">Subject</th>
-                <th className="p-2 text-left border">Purpose</th>
-                <th className="p-2 text-left border">Accepted</th>
-                <th className="p-2 text-left border">Revoked</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((c) => (
-                <tr key={c.id} className="border-t hover:bg-gray-50">
-                  <td className="p-2 border font-mono text-xs">{c.subject_id}</td>
-                  <td className="p-2 border">{c.purpose}</td>
-                  <td className="p-2 border text-gray-600">
-                    {c.accepted_at
-                      ? new Date(c.accepted_at).toLocaleString()
-                      : "—"}
-                  </td>
-                  <td className="p-2 border text-gray-600">
-                    {c.revoked_at ? new Date(c.revoked_at).toLocaleString() : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Consent Records</CardTitle>
+            <Button onClick={exportCSV} variant="outline" size="sm">
+              <Download className="h-4 w-4 mr-2" />
+              Export CSV
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-4">
+            <Input
+              type="text"
+              placeholder="Search by subject or purpose..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="max-w-md"
+            />
+          </div>
+
+          {filtered.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-sm text-slate-600">No consent records found.</p>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-slate-200 overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Subject</TableHead>
+                    <TableHead>Purpose</TableHead>
+                    <TableHead>Accepted</TableHead>
+                    <TableHead>Revoked</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((c) => (
+                    <TableRow key={c.id}>
+                      <TableCell className="font-mono text-xs">{c.subject_id}</TableCell>
+                      <TableCell>{c.purpose}</TableCell>
+                      <TableCell className="text-slate-600">
+                        {c.accepted_at
+                          ? new Date(c.accepted_at).toLocaleString()
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="text-slate-600">
+                        {c.revoked_at ? new Date(c.revoked_at).toLocaleString() : "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
