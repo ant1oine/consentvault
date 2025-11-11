@@ -1,5 +1,6 @@
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { I18nProvider } from "@/lib/i18n";
 
 export const metadata = {
   title: "ConsentVault",
@@ -9,8 +10,10 @@ export const metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen">
-        <Providers>{children}</Providers>
+      <body className="min-h-screen text-slate-800">
+        <I18nProvider>
+          <Providers>{children}</Providers>
+        </I18nProvider>
       </body>
     </html>
   );
