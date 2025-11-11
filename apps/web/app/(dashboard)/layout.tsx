@@ -2,8 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import TopNav from "@/components/layout/TopNav";
-import Sidebar from "@/components/layout/sidebar";
+import { PageShell } from "@/components/chrome/PageShell";
 import Spinner from "@/components/ui/Spinner";
 import { useAuth } from "@/components/providers/AuthProvider";
 
@@ -25,14 +24,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return null; // Will redirect
   }
 
-  return (
-    <div className="flex flex-col h-screen bg-gradient-to-b from-slate-50 to-white text-slate-800 antialiased">
-      <TopNav />
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
-        <main className="flex-1 overflow-y-auto p-6 md:p-8">{children}</main>
-      </div>
-    </div>
-  );
+  return <PageShell>{children}</PageShell>;
 }
 

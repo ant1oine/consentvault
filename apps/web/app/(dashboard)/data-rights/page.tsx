@@ -105,16 +105,19 @@ export default function DataRightsPage() {
 
   return (
     <section>
-      <div className="mb-4">
-        <h2 className="text-2xl font-semibold text-slate-900 tracking-tight">Data Rights Requests</h2>
-        <p className="text-sm text-slate-500">Track data access and deletion requests.</p>
-      </div>
+      <h2 className="text-2xl font-semibold text-slate-900 tracking-tight">Data Rights Requests</h2>
+      <p className="text-sm text-slate-500 mb-4">Track data access and deletion requests.</p>
 
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-slate-200 bg-slate-50">
+        <div className="p-5 border-b border-slate-200 bg-slate-50">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-medium text-slate-800">Data Rights Requests</h3>
-            <Button onClick={exportCSV} variant="outline" size="sm" className="focus-visible:ring-2 focus-visible:ring-blue-500">
+            <Button
+              onClick={exportCSV}
+              variant="outline"
+              size="sm"
+              className="focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
               <Download className="h-4 w-4 mr-2" />
               Export CSV
             </Button>
@@ -144,14 +147,9 @@ export default function DataRightsPage() {
                 <th className="px-4 py-3 text-left">Updated</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filtered.map((r, index) => (
-                <tr
-                  key={r.id}
-                  className={`transition-colors hover:bg-slate-50 ${
-                    index % 2 === 1 ? "bg-slate-50" : ""
-                  }`}
-                >
+            <tbody className="divide-y divide-slate-100 odd:bg-slate-50 hover:bg-slate-50 transition-all">
+              {filtered.map((r) => (
+                <tr key={r.id} className="hover:bg-slate-50 transition-all">
                   <td className="px-4 py-3">
                     <span className="font-mono text-xs text-slate-700">{r.subject_id}</span>
                   </td>
@@ -160,9 +158,7 @@ export default function DataRightsPage() {
                     <span className={getStatusBadge(r.status)}>{r.status}</span>
                   </td>
                   <td className="px-4 py-3 text-slate-600">
-                    {r.created_at
-                      ? new Date(r.created_at).toLocaleString()
-                      : "—"}
+                    {r.created_at ? new Date(r.created_at).toLocaleString() : "—"}
                   </td>
                 </tr>
               ))}

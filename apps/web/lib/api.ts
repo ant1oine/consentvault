@@ -1,4 +1,13 @@
 // apps/web/lib/api.ts
+import { clearAuth } from "./auth";
+
+// Custom error class for auth errors
+export class AuthError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AuthError";
+  }
+}
 
 export async function apiFetch(path: string, options: RequestInit = {}) {
   const token =
@@ -31,6 +40,20 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
 
   if (!res.ok) {
     const text = await res.text();
+    
+    // Handle 401 Unauthorized (token expired or invalid)
+    if (res.status === 401) {
+      // Clear auth tokens
+      if (typeof window !== "undefined") {
+        clearAuth();
+        // Dispatch event to notify AuthProvider
+        window.dispatchEvent(new CustomEvent("auth-expired"));
+      }
+      // Throw a specific error type that can be caught and handled
+      throw new AuthError("Authentication expired. Please log in again.");
+    }
+    
+    // For other errors, log and throw normally
     console.error(`❌ API ${res.status}: ${text}`);
     throw new Error(text);
   }

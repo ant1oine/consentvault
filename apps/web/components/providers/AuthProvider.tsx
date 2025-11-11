@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { getAccessToken, getActiveOrgId, setActiveOrgId, clearAuth } from "@/lib/auth";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, AuthError } from "@/lib/api";
 
 interface Org {
   org_id: string;
@@ -57,11 +57,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     } catch (error) {
-      console.error("Failed to fetch user:", error);
-      // Token might be invalid, clear auth
-      clearAuth();
-      setUser(null);
-      router.replace("/login");
+      // If it's an AuthError, the apiFetch already cleared auth and dispatched the event
+      // So we just need to update local state - the event handler will redirect
+      if (error instanceof AuthError) {
+        setUser(null);
+        setActiveOrgIdState(null);
+      } else {
+        // For other errors, log and clear auth manually
+        console.error("Failed to fetch user:", error);
+        clearAuth();
+        setUser(null);
+        router.replace("/login");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -84,14 +91,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshUser();
     };
 
+    // Listen for auth expiration events (from apiFetch 401 handling)
+    const handleAuthExpired = () => {
+      setUser(null);
+      setActiveOrgIdState(null);
+      setIsLoading(false);
+      router.replace("/login");
+    };
+
     window.addEventListener("storage", handleStorageChange);
     window.addEventListener("auth-storage-change", handleCustomStorageChange);
+    window.addEventListener("auth-expired", handleAuthExpired);
 
     return () => {
       window.removeEventListener("storage", handleStorageChange);
       window.removeEventListener("auth-storage-change", handleCustomStorageChange);
+      window.removeEventListener("auth-expired", handleAuthExpired);
     };
-  }, [refreshUser]);
+  }, [refreshUser, router]);
 
   const handleSetActiveOrgId = (orgId: string) => {
     setActiveOrgIdState(orgId);

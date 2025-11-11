@@ -67,16 +67,19 @@ export default function ConsentsPage() {
 
   return (
     <section>
-      <div className="mb-4">
-        <h2 className="text-2xl font-semibold text-slate-900 tracking-tight">Consents</h2>
-        <p className="text-sm text-slate-500">View and manage user consent records.</p>
-      </div>
+      <h2 className="text-2xl font-semibold text-slate-900 tracking-tight">Consents</h2>
+      <p className="text-sm text-slate-500 mb-4">View and manage user consent records.</p>
 
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-slate-200 bg-slate-50">
+        <div className="p-5 border-b border-slate-200 bg-slate-50">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-medium text-slate-800">Consent Records</h3>
-            <Button onClick={exportCSV} variant="outline" size="sm" className="focus-visible:ring-2 focus-visible:ring-blue-500">
+            <Button
+              onClick={exportCSV}
+              variant="outline"
+              size="sm"
+              className="focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
               <Download className="h-4 w-4 mr-2" />
               Export CSV
             </Button>
@@ -106,14 +109,9 @@ export default function ConsentsPage() {
                 <th className="px-4 py-3 text-left">Last Updated</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filtered.map((c, index) => (
-                <tr
-                  key={c.id}
-                  className={`transition-colors hover:bg-slate-50 ${
-                    index % 2 === 1 ? "bg-slate-50" : ""
-                  }`}
-                >
+            <tbody className="divide-y divide-slate-100 odd:bg-slate-50 hover:bg-slate-50 transition-all">
+              {filtered.map((c) => (
+                <tr key={c.id} className="hover:bg-slate-50 transition-all">
                   <td className="px-4 py-3">
                     <span className="font-mono text-xs text-slate-700">{c.subject_id}</span>
                   </td>
@@ -133,8 +131,8 @@ export default function ConsentsPage() {
                     {c.revoked_at
                       ? new Date(c.revoked_at).toLocaleString()
                       : c.accepted_at
-                      ? new Date(c.accepted_at).toLocaleString()
-                      : "—"}
+                        ? new Date(c.accepted_at).toLocaleString()
+                        : "—"}
                   </td>
                 </tr>
               ))}
