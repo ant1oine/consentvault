@@ -5,10 +5,38 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
 from sqlalchemy.orm import Session
 
 from app.db import AuditLog, Org, OrgUser, User, get_db
-from app.deps import get_org_by_api_key, get_current_user_optional
+from app.deps import get_org_by_api_key, get_current_user_optional, get_current_user
 from app.schemas import AuditLogOut
 
 router = APIRouter(prefix="/v1/audit", tags=["Audit"])
+
+
+@router.get("/logs")
+def get_audit_logs(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get audit logs for the current user.
+    Superadmins see all logs; regular users see only their own actions.
+    """
+    q = db.query(AuditLog).order_by(AuditLog.created_at.desc())
+    
+    # Superadmins see all logs; regular users see only their own actions
+    if not current_user.is_superadmin:
+        q = q.filter(AuditLog.user_email == current_user.email)
+    
+    logs = q.limit(200).all()
+    
+    return [
+        {
+            "timestamp": str(l.created_at),
+            "event_type": l.action,
+            "actor": l.user_email,
+            "details": l.metadata_json,
+        }
+        for l in logs
+    ]
 
 
 @router.get("", response_model=list[AuditLogOut])

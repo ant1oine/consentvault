@@ -1,4 +1,7 @@
-// apps/web/lib/api.ts
+/**
+ * Unified API utilities for ConsentVault
+ * Supports both authenticated (JWT) and API key modes.
+ */
 import { clearAuth } from "./auth";
 
 // Custom error class for auth errors
@@ -9,35 +12,15 @@ export class AuthError extends Error {
   }
 }
 
-export async function apiFetch(path: string, options: RequestInit = {}) {
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-  const orgId =
-    typeof window !== "undefined" ? localStorage.getItem("active_org_id") : null;
-
-  const headers = new Headers(options.headers || {});
-  headers.set("Content-Type", "application/json");
-
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-  if (orgId) headers.set("X-Org-ID", orgId);
-
-  const baseUrl =
+const getBaseUrl = () => {
+  return (
     process.env.NEXT_PUBLIC_API_URL ||
     process.env.NEXT_PUBLIC_API_BASE_URL ||
-    "http://localhost:8000";
+    "http://localhost:8000"
+  );
+};
 
-  // Also append org_id query param as fallback (backend supports both)
-  let url = `${baseUrl}${path}`;
-  if (orgId && !url.includes("org_id=")) {
-    const sep = url.includes("?") ? "&" : "?";
-    url += `${sep}org_id=${orgId}`;
-  }
-
-  const res = await fetch(url, {
-    ...options,
-    headers,
-  });
-
+const handleError = async (res: Response) => {
   if (!res.ok) {
     let errorMessage = `Request failed with status ${res.status}`;
     let errorDetail: any = null;
@@ -64,8 +47,6 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
         // Dispatch event to notify AuthProvider
         window.dispatchEvent(new CustomEvent("auth-expired"));
       }
-      // Throw a specific error type that can be caught and handled
-      // Don't log AuthErrors as they're expected and handled gracefully
       throw new AuthError(errorMessage || "Authentication expired. Please log in again.");
     }
     
@@ -77,33 +58,53 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
     }
     throw error;
   }
+};
 
+/**
+ * For logged-in users via session/JWT (e.g., dashboard actions)
+ * This is the primary method for dashboard pages.
+ */
+export async function apiFetchAuthed(path: string, options: RequestInit = {}) {
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+  const orgId =
+    typeof window !== "undefined" ? localStorage.getItem("active_org_id") : null;
+
+  const headers = new Headers(options.headers || {});
+  headers.set("Content-Type", "application/json");
+
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (orgId) headers.set("X-Org-ID", orgId);
+
+  const baseUrl = getBaseUrl();
+  
+  // Also append org_id query param as fallback (backend supports both)
+  let url = `${baseUrl}${path}`;
+  if (orgId && !url.includes("org_id=")) {
+    const sep = url.includes("?") ? "&" : "?";
+    url += `${sep}org_id=${orgId}`;
+  }
+
+  const res = await fetch(url, {
+    ...options,
+    credentials: "include",
+    headers,
+  });
+
+  await handleError(res);
   return res.json();
 }
 
-// Core API calls
-export async function login(email: string, password: string) {
-  return apiFetch("/v1/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ email, password }),
-  });
-}
-
-export async function getMe() {
-  return apiFetch("/v1/auth/me");
-}
-
-// Helper for API requests with API key (for consent endpoints)
+/**
+ * For external SDKs or org integrations using x-api-key
+ * Use this only for SDK/widget integrations, not dashboard pages.
+ */
 export async function apiFetchWithApiKey(path: string, apiKey: string, options: RequestInit = {}) {
   const headers = new Headers(options.headers || {});
   headers.set("Content-Type", "application/json");
-  headers.set("Authorization", `Bearer ${apiKey}`);
+  headers.set("X-API-Key", apiKey);
 
-  const baseUrl =
-    process.env.NEXT_PUBLIC_API_URL ||
-    process.env.NEXT_PUBLIC_API_BASE_URL ||
-    "http://localhost:8000";
-
+  const baseUrl = getBaseUrl();
   const url = `${baseUrl}${path}`;
 
   const res = await fetch(url, {
@@ -111,45 +112,99 @@ export async function apiFetchWithApiKey(path: string, apiKey: string, options: 
     headers,
   });
 
-  if (!res.ok) {
-    const text = await res.text();
-    console.error(`❌ API ${res.status}: ${text}`);
-    throw new Error(text);
-  }
-
+  await handleError(res);
   return res.json();
 }
 
-export async function getConsents(apiKey?: string, orgId?: string) {
+/**
+ * Smart hybrid mode — auto-detects whether to use JWT or API key.
+ * Use this for generic components or shared libraries.
+ */
+export async function smartApiFetch(path: string, options: RequestInit = {}) {
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+  const apiKey =
+    typeof window !== "undefined" ? localStorage.getItem("api_key") : null;
+  const orgId =
+    typeof window !== "undefined" ? localStorage.getItem("active_org_id") : null;
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers as Record<string, string> || {}),
+  };
+
+  // Prefer API key if available (for SDK/widget usage)
   if (apiKey) {
-    return apiFetchWithApiKey("/v1/consents", apiKey);
+    headers["X-API-Key"] = apiKey;
+  } else if (token) {
+    // Otherwise use JWT token (for dashboard usage)
+    headers["Authorization"] = `Bearer ${token}`;
+    if (orgId) headers["X-Org-ID"] = orgId;
   }
-  // Use JWT auth with optional org_id for superadmins
+
+  const baseUrl = getBaseUrl();
+  let url = `${baseUrl}${path}`;
+  
+  // Append org_id query param if available and not already present
+  if (orgId && !url.includes("org_id=")) {
+    const sep = url.includes("?") ? "&" : "?";
+    url += `${sep}org_id=${orgId}`;
+  }
+
+  const res = await fetch(url, {
+    ...options,
+    credentials: "include",
+    headers,
+  });
+
+  await handleError(res);
+  return res.json();
+}
+
+// Legacy function - kept for backward compatibility but redirects to apiFetchAuthed
+export async function apiFetch(path: string, options: RequestInit = {}) {
+  return apiFetchAuthed(path, options);
+}
+
+// Core API calls
+export async function login(email: string, password: string) {
+  return apiFetchAuthed("/v1/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export async function getMe() {
+  return apiFetchAuthed("/v1/auth/me");
+}
+
+export async function getConsents(orgId?: string) {
+  // Dashboard users should use JWT auth, not API key
   const path = orgId ? `/consents?org_id=${orgId}` : "/consents";
-  return apiFetch(path);
+  return apiFetchAuthed(path);
 }
 
 export async function getOrgs() {
-  return apiFetch("/v1/orgs");
+  return apiFetchAuthed("/v1/orgs");
 }
 
 export async function getOrg(orgId: string) {
-  return apiFetch(`/v1/orgs/${orgId}`);
+  return apiFetchAuthed(`/v1/orgs/${orgId}`);
 }
 
 export async function createOrg(data: { name: string; region: string }) {
-  return apiFetch("/v1/orgs", {
+  return apiFetchAuthed("/v1/orgs", {
     method: "POST",
     body: JSON.stringify(data),
   });
 }
 
 export async function getUsers(orgId: string) {
-  return apiFetch(`/v1/users?org_id=${orgId}`);
+  return apiFetchAuthed(`/v1/users?org_id=${orgId}`);
 }
 
 export async function createUser(data: { org_id: string; email: string; name: string; role: string }) {
-  return apiFetch("/v1/users", {
+  return apiFetchAuthed("/v1/users", {
     method: "POST",
     body: JSON.stringify(data),
   });
@@ -157,17 +212,31 @@ export async function createUser(data: { org_id: string; email: string; name: st
 
 export async function getDashboardSummary(orgId?: string) {
   const path = orgId ? `/v1/dashboard/summary?org_id=${orgId}` : "/v1/dashboard/summary";
-  return apiFetch(path);
+  return apiFetchAuthed(path);
+}
+
+export async function getPlatformOrgs() {
+  return apiFetchAuthed("/v1/dashboard/platform/orgs");
+}
+
+export async function getPlatformOrgDetails(orgId: string) {
+  return apiFetchAuthed(`/v1/dashboard/platform/orgs/${orgId}`);
 }
 
 export async function getAuditLogs(orgId?: string) {
   const path = orgId ? `/v1/audit?org_id=${orgId}` : "/v1/audit";
-  return apiFetch(path);
+  return apiFetchAuthed(path);
+}
+
+export async function getAuditLogsSimple() {
+  // Use the simplified endpoint that requires JWT auth only
+  // This endpoint filters logs based on user permissions automatically
+  return apiFetchAuthed("/v1/audit/logs");
 }
 
 export async function getDataRights(orgId?: string) {
   const path = orgId ? `/v1/data-rights?org_id=${orgId}` : "/v1/data-rights";
-  return apiFetch(path);
+  return apiFetchAuthed(path);
 }
 
 export async function createDataRightRequest(data: {
@@ -175,42 +244,42 @@ export async function createDataRightRequest(data: {
   request_type: "access" | "rectify" | "erase";
   notes?: string;
 }) {
-  return apiFetch("/v1/data-rights", {
+  return apiFetchAuthed("/v1/data-rights", {
     method: "POST",
     body: JSON.stringify(data),
   });
 }
 
 export async function updateDataRightStatus(requestId: string, status: "processing" | "completed" | "rejected") {
-  return apiFetch(`/v1/data-rights/${requestId}/status`, {
+  return apiFetchAuthed(`/v1/data-rights/${requestId}/status`, {
     method: "POST",
     body: JSON.stringify({ status }),
   });
 }
 
 export async function getOrgDetails(orgId: string) {
-  return apiFetch(`/v1/orgs/${orgId}`);
+  return apiFetchAuthed(`/v1/orgs/${orgId}`);
 }
 
 export async function createConsent(data: any) {
-  return apiFetch("/consents", {
+  return apiFetchAuthed("/consents", {
     method: "POST",
     body: JSON.stringify(data),
   });
 }
 
 export async function getOrgUsers() {
-  return apiFetch("/v1/users");
+  return apiFetchAuthed("/v1/users");
 }
 
 export async function exportConsents(format = "csv") {
-  return apiFetch(`/export?format=${format}`);
+  return apiFetchAuthed(`/export?format=${format}`);
 }
 
 // Utility check for backend health
 export async function checkBackendConnection() {
   try {
-    await apiFetch("/healthz");
+    await apiFetchAuthed("/healthz");
     return true;
   } catch {
     return false;
@@ -218,7 +287,7 @@ export async function checkBackendConnection() {
 }
 
 export async function getCheckoutUrl() {
-  const data = await apiFetch("/billing/checkout");
+  const data = await apiFetchAuthed("/billing/checkout");
   return data.url;
 }
 
@@ -255,7 +324,7 @@ export function getExportHtmlUrl(orgId: string, params?: {
 // Stub functions for pages that may not be fully implemented yet
 export async function revokeConsent(consentId: string, orgId: string) {
   // Note: This endpoint may not exist in the backend yet
-  return apiFetch(`/consents/${consentId}/revoke`, {
+  return apiFetchAuthed(`/consents/${consentId}/revoke`, {
     method: "POST",
   });
 }
@@ -268,7 +337,7 @@ export interface UserCreate {
 
 export async function createUserLegacy(data: UserCreate) {
   // Legacy endpoint - kept for backward compatibility
-  return apiFetch("/orgs/users", {
+  return apiFetchAuthed("/orgs/users", {
     method: "POST",
     body: JSON.stringify(data),
   });

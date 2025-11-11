@@ -17,6 +17,7 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     container_name: consentvault-api
+    working_dir: /app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
       - ./apps/api:/app
@@ -31,6 +32,7 @@ services:
       DB_PASSWORD: consentvault
       DB_NAME: consentvault
       PORT: 8000
+      PYTHONPATH: /app
     ports:
       - "8000:8000"
     depends_on:

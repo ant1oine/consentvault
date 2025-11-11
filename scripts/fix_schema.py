@@ -2,14 +2,9 @@
 """Fix database schema by adding missing columns if they don't exist."""
 import os
 import sys
-import secrets
 
-# Add both /app and /app/app to the Python path to ensure imports work in Docker
-base_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.extend([
-    os.path.abspath(os.path.join(base_dir, "..")),
-    os.path.abspath(os.path.join(base_dir, "..", "app")),
-])
+sys.path.append(os.path.abspath(os.path.dirname(os.path.abspath(__file__)) + "/.."))
+import secrets
 
 from app.db import engine, SessionLocal, Org
 from sqlalchemy import text

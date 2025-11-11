@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { getConsents, getOrgDetails } from "@/lib/api";
+import { getConsents } from "@/lib/api";
 import { queryKeys } from "@/lib/queryKeys";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -11,27 +11,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Download, AlertCircle } from "lucide-react";
 
 export default function ConsentsPage() {
-  const { activeOrgId, user } = useAuth();
+  const { activeOrgId } = useAuth();
   const [search, setSearch] = useState("");
 
-  // For superadmins, fetch consents directly without needing org details
-  const isSuperadmin = user?.is_superadmin;
-  
-  // First, fetch org details to get the API key (only for regular users)
-  const { data: orgDetails, isLoading: isLoadingOrg } = useQuery({
-    queryKey: queryKeys.orgDetails(activeOrgId || ""),
-    queryFn: () => getOrgDetails(activeOrgId!),
-    enabled: !!activeOrgId && !isSuperadmin,
+  // Fetch consents using JWT auth (no API key needed for dashboard users)
+  const { data: consents = [], isLoading, error } = useQuery({
+    queryKey: queryKeys.consents({ orgId: activeOrgId || undefined }),
+    queryFn: () => getConsents(activeOrgId || undefined),
+    enabled: true, // Always enabled, backend handles filtering
   });
-
-  // Then fetch consents using the API key (for regular users) or JWT (for superadmins)
-  const { data: consents = [], isLoading: isLoadingConsents, error } = useQuery({
-    queryKey: queryKeys.consents({ apiKey: orgDetails?.api_key }),
-    queryFn: () => getConsents(orgDetails?.api_key, activeOrgId || undefined),
-    enabled: isSuperadmin || !!orgDetails?.api_key,
-  });
-
-  const isLoading = isLoadingOrg || isLoadingConsents;
 
   const filtered = consents.filter(
     (c: any) =>

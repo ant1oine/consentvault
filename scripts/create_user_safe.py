@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a user manually with audit logging."""
+"""Create a regular user (non-superadmin) interactively with audit logging."""
 import os
 import sys
 
@@ -11,16 +11,12 @@ from app.utils.audit import record_audit
 
 
 def main():
-    # Command-line mode only (for make create-user)
-    # Superadmin creation is ONLY possible via command-line with --superadmin flag
-    if len(sys.argv) < 3:
-        print("Usage: python create_user.py <email> <password> [--superadmin]")
-        print("Note: Superadmin creation requires explicit --superadmin flag")
-        sys.exit(1)
+    email = input("User Email: ").strip()
+    password = input("Password: ").strip()
     
-    email = sys.argv[1].strip()
-    password = sys.argv[2].strip()
-    is_super = "--superadmin" in sys.argv
+    if not email or not password:
+        print("❌ Email and password are required.")
+        sys.exit(1)
     
     db = SessionLocal()
     try:
@@ -31,13 +27,13 @@ def main():
         user = User(
             email=email,
             password_hash=get_password_hash(password),
-            is_superadmin=is_super
+            is_superadmin=False  # Always False for safe interactive creation
         )
         db.add(user)
         db.commit()
         db.refresh(user)
         
-        record_audit("user_created", email, {"is_superadmin": is_super, "user_id": str(user.id)})
+        record_audit("user_created", email, {"is_superadmin": False, "user_id": str(user.id)})
         
         print(f"✅ Created user {email}")
     except Exception as e:
@@ -50,3 +46,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

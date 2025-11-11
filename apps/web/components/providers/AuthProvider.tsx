@@ -23,6 +23,8 @@ interface AuthContextType {
   activeOrgId: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isSuperadmin: boolean;
+  scope: "platform" | "org";
   setActiveOrgId: (orgId: string) => void;
   logout: () => void;
   refreshUser: () => Promise<void>;
@@ -53,25 +55,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const me = await getMe();
       setUser(me);
 
-      // Set active org if not already set
-      const storedOrgId = getActiveOrgId();
-      if (me.orgs?.length > 0) {
-        if (storedOrgId && me.orgs.some((org) => org.org_id === storedOrgId || org.id === storedOrgId)) {
-          setActiveOrgIdState(storedOrgId);
-        } else {
-          const firstOrgId = me.orgs[0].org_id || me.orgs[0].id;
-          if (firstOrgId) {
-            setActiveOrgIdState(firstOrgId);
-            setActiveOrgId(firstOrgId);
-          }
-        }
-      } else {
-        // No orgs - clear active org
+      // Handle platform vs org context
+      if (me.is_superadmin) {
+        // Superadmins operate at platform level - no org context
         setActiveOrgIdState(null);
-        // If user has no orgs and is not superadmin, redirect to create-org
-        if (!me.is_superadmin) {
-          // Don't redirect immediately - let the component handle it
-          // This allows the dashboard to show "no org" message
+      } else {
+        // Regular users - set active org if available
+        const storedOrgId = getActiveOrgId();
+        if (me.orgs?.length > 0) {
+          if (storedOrgId && me.orgs.some((org) => org.org_id === storedOrgId || org.id === storedOrgId)) {
+            setActiveOrgIdState(storedOrgId);
+          } else {
+            const firstOrgId = me.orgs[0].org_id || me.orgs[0].id;
+            if (firstOrgId) {
+              setActiveOrgIdState(firstOrgId);
+              setActiveOrgId(firstOrgId);
+            }
+          }
+        } else {
+          // No orgs - clear active org
+          setActiveOrgIdState(null);
         }
       }
       
@@ -163,6 +166,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.replace("/login");
   };
 
+  const isSuperadmin = user?.is_superadmin ?? false;
+  const scope = isSuperadmin ? "platform" : "org";
+
   return (
     <AuthContext.Provider
       value={{
@@ -170,6 +176,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         activeOrgId,
         isLoading,
         isAuthenticated: !!user && !!getAccessToken(),
+        isSuperadmin,
+        scope,
         setActiveOrgId: handleSetActiveOrgId,
         logout: handleLogout,
         refreshUser,

@@ -3,58 +3,109 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { getAuditLogs } from "@/lib/api";
-import { queryKeys } from "@/lib/queryKeys";
+import { getAuditLogsSimple } from "@/lib/api";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle, Activity } from "lucide-react";
+import { AlertCircle, Activity, X } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 interface AuditLog {
-  id: string;
-  org_id: string | null;
-  user_email: string | null;
-  action: string;
-  entity_type: string;
-  entity_id: string | null;
-  metadata_json: Record<string, any> | null;
-  created_at: string;
+  timestamp: string;
+  event_type: string;
+  actor: string | null;
+  details: Record<string, any> | null;
+}
+
+// Simple date formatter (human-readable relative time)
+function formatTimeAgo(date: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSecs = Math.floor(diffMs / 1000);
+  const diffMins = Math.floor(diffSecs / 60);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffSecs < 60) return "just now";
+  if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? "s" : ""} ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
+  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
+  return date.toLocaleDateString();
 }
 
 export default function ActivityPage() {
-  const { activeOrgId, user } = useAuth();
+  const { isSuperadmin } = useAuth();
   const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
 
-  // Superadmins can see all logs, regular users see only their org's logs
+  // Superadmin-only access
+  if (!isSuperadmin) {
+    return (
+      <section>
+        <div className="rounded-2xl bg-red-50 border border-red-200 shadow-sm p-6">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-red-600" />
+            <p className="text-sm text-red-700">
+              Access denied. This page is only available to superadmins.
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  // Use the new simplified endpoint - backend handles filtering by user permissions
   const { data: logs = [], isLoading, error } = useQuery<AuditLog[]>({
-    queryKey: queryKeys.auditLogsByOrg(activeOrgId || undefined),
-    queryFn: () => getAuditLogs(activeOrgId || undefined),
-    enabled: true, // Always enabled, backend handles filtering
+    queryKey: ["audit-logs-simple"],
+    queryFn: () => getAuditLogsSimple(),
+    enabled: true,
   });
 
-  const filtered = logs.filter(
-    (log) =>
-      log.action?.toLowerCase().includes(search.toLowerCase()) ||
-      log.entity_type?.toLowerCase().includes(search.toLowerCase()) ||
-      log.user_email?.toLowerCase().includes(search.toLowerCase()) ||
-      JSON.stringify(log.metadata_json || {}).toLowerCase().includes(search.toLowerCase())
-  );
+  // Get unique event types for filter dropdown
+  const eventTypes = Array.from(new Set(logs.map((l) => l.event_type))).sort();
 
-  const formatAction = (action: string, entityType: string) => {
-    const actionMap: Record<string, string> = {
-      created: "Created",
-      updated: "Updated",
-      deleted: "Deleted",
-      revoked: "Revoked",
-      added_user: "Added User",
+  const filtered = logs.filter((log) => {
+    const matchesSearch =
+      search === "" ||
+      log.event_type?.toLowerCase().includes(search.toLowerCase()) ||
+      log.actor?.toLowerCase().includes(search.toLowerCase()) ||
+      JSON.stringify(log.details || {}).toLowerCase().includes(search.toLowerCase());
+
+    const matchesFilter = filter === "all" || log.event_type === filter;
+
+    return matchesSearch && matchesFilter;
+  });
+
+  const formatEventType = (eventType: string) => {
+    const eventMap: Record<string, string> = {
+      user_created: "User Created",
+      user_promoted: "User Promoted to Superadmin",
+      user_role_changed: "User Role Changed",
+      org_created: "Organization Created",
+      user_assigned_to_org: "User Assigned to Org",
+      consent_created: "Consent Created",
+      consent_revoked: "Consent Revoked",
+      dsar_created: "DSAR Created",
+      dsar_completed: "DSAR Completed",
     };
-    return `${actionMap[action] || action} ${entityType}`;
+    return (
+      eventMap[eventType] ||
+      eventType.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())
+    );
   };
 
-  const getActionColor = (action: string) => {
-    if (action === "created" || action === "added_user") {
+  const getEventColor = (eventType: string) => {
+    if (eventType.includes("created") || eventType.includes("assigned") || eventType.includes("promoted") || eventType.includes("role_changed")) {
       return "bg-green-50 text-green-700 border-green-200";
     }
-    if (action === "deleted" || action === "revoked") {
+    if (eventType.includes("deleted") || eventType.includes("revoked")) {
       return "bg-red-50 text-red-700 border-red-200";
     }
     return "bg-blue-50 text-blue-700 border-blue-200";
@@ -102,20 +153,45 @@ export default function ActivityPage() {
         <p className="text-sm text-slate-500">
           {user?.is_superadmin
             ? "View audit trail of all platform actions across all organizations."
-            : "View audit trail of actions in your organization."}
+            : "View audit trail of your own actions."}
         </p>
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <div className="p-5 border-b border-slate-200 bg-slate-50">
-          <div className="mb-4">
+          <div className="flex flex-wrap gap-3 items-center mb-4">
             <Input
               type="text"
-              placeholder="Search by action, entity type, user email..."
+              placeholder="Search by user or event..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="max-w-md focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="flex-1 min-w-[200px] max-w-md focus-visible:ring-2 focus-visible:ring-blue-500"
             />
+            <select
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              className="h-10 px-3 rounded-md border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="all">All Events</option>
+              {eventTypes.map((type) => (
+                <option key={type} value={type}>
+                  {formatEventType(type)}
+                </option>
+              ))}
+            </select>
+            {(search || filter !== "all") && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSearch("");
+                  setFilter("all");
+                }}
+                className="h-10"
+              >
+                Clear
+              </Button>
+            )}
           </div>
           <div className="text-xs text-slate-500">
             Showing {filtered.length} of {logs.length} log entries
@@ -125,62 +201,54 @@ export default function ActivityPage() {
         {filtered.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-sm text-slate-500">
-              {search ? "No activity logs match your search." : "No activity logs found."}
+              {search || filter !== "all"
+                ? "No activity logs match your search."
+                : "No activity logs found."}
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
             <table className="min-w-full text-sm">
-              <thead className="bg-slate-100 text-slate-600 uppercase text-xs">
+              <thead className="bg-slate-100 text-slate-600 uppercase text-xs sticky top-0">
                 <tr>
-                  <th className="px-4 py-3 text-left">Time</th>
-                  <th className="px-4 py-3 text-left">Action</th>
-                  <th className="px-4 py-3 text-left">User</th>
-                  <th className="px-4 py-3 text-left">Entity</th>
+                  <th className="px-4 py-3 text-left">Timestamp</th>
+                  <th className="px-4 py-3 text-left">Event Type</th>
+                  <th className="px-4 py-3 text-left">Actor</th>
                   <th className="px-4 py-3 text-left">Details</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filtered.map((log) => (
-                  <tr key={log.id} className="hover:bg-slate-50 transition-all">
+                {filtered.map((log, i) => (
+                  <tr
+                    key={i}
+                    className="hover:bg-slate-50 transition-all cursor-pointer"
+                    onClick={() => setSelectedLog(log)}
+                  >
                     <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
-                      {new Date(log.created_at).toLocaleString()}
+                      {formatTimeAgo(new Date(log.timestamp))}
+                      <br />
+                      <span className="text-xs text-slate-400">
+                        {new Date(log.timestamp).toLocaleString()}
+                      </span>
                     </td>
                     <td className="px-4 py-3">
                       <span
-                        className={`px-2.5 py-1 rounded-md text-xs font-medium border ${getActionColor(
-                          log.action
+                        className={`px-2.5 py-1 rounded-md text-xs font-medium border ${getEventColor(
+                          log.event_type
                         )}`}
                       >
-                        {formatAction(log.action, log.entity_type)}
+                        {formatEventType(log.event_type)}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-slate-700">
-                      {log.user_email || (
+                      {log.actor || (
                         <span className="text-slate-400 italic">System</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      <span className="font-mono text-xs">{log.entity_type}</span>
-                      {log.entity_id && (
-                        <span className="text-slate-400 ml-1">
-                          ({log.entity_id.substring(0, 8)}...)
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {log.metadata_json && Object.keys(log.metadata_json).length > 0 ? (
-                        <details className="cursor-pointer">
-                          <summary className="text-xs text-blue-600 hover:text-blue-700">
-                            View details
-                          </summary>
-                          <pre className="mt-2 text-xs bg-slate-50 p-2 rounded border border-slate-200 overflow-x-auto">
-                            {JSON.stringify(log.metadata_json, null, 2)}
-                          </pre>
-                        </details>
-                      ) : (
-                        <span className="text-slate-400">—</span>
-                      )}
+                    <td className="px-4 py-3 text-blue-600 underline text-xs">
+                      {log.details && Object.keys(log.details).length > 0
+                        ? "View details"
+                        : "—"}
                     </td>
                   </tr>
                 ))}
@@ -189,7 +257,33 @@ export default function ActivityPage() {
           </div>
         )}
       </div>
+
+      {/* Details Dialog */}
+      {selectedLog && (
+        <Dialog open={!!selectedLog} onOpenChange={() => setSelectedLog(null)}>
+          <DialogContent className="max-w-2xl max-h-[80vh]" onClose={() => setSelectedLog(null)}>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <span>{formatEventType(selectedLog.event_type)}</span>
+              </DialogTitle>
+              <DialogDescription>
+                Performed by <strong>{selectedLog.actor || "System"}</strong>{" "}
+                {formatTimeAgo(new Date(selectedLog.timestamp))} (
+                {new Date(selectedLog.timestamp).toLocaleString()})
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-4 max-h-[60vh] overflow-y-auto">
+              {selectedLog.details && Object.keys(selectedLog.details).length > 0 ? (
+                <pre className="bg-slate-50 p-4 rounded-md text-xs text-slate-800 overflow-x-auto border border-slate-200 whitespace-pre-wrap">
+                  {JSON.stringify(selectedLog.details, null, 2)}
+                </pre>
+              ) : (
+                <p className="text-sm text-slate-500 italic">No additional details available.</p>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </section>
   );
 }
-

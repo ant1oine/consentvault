@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { LayoutDashboard, Activity, FileCheck, UserCog, History, ShieldCheck } from "lucide-react";
+import { useAuth } from "@/components/providers/AuthProvider";
 
 function SidebarLink({
   icon: Icon,
@@ -32,6 +33,7 @@ function SidebarLink({
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { isSuperadmin } = useAuth();
 
   return (
     <aside className="bg-slate-50 border-r border-slate-200 shadow-inner w-64 min-h-screen flex flex-col">
@@ -51,12 +53,6 @@ export default function Sidebar() {
           href="/api-logs"
           isActive={pathname === "/api-logs"}
         />
-        <SidebarLink
-          icon={History}
-          label="Activity"
-          href="/activity"
-          isActive={pathname === "/activity"}
-        />
 
         <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-3 mt-4">
           Governance
@@ -73,6 +69,15 @@ export default function Sidebar() {
           href="/data-rights"
           isActive={pathname === "/data-rights"}
         />
+        
+        {isSuperadmin && (
+          <SidebarLink
+            icon={History}
+            label="Activity"
+            href="/activity"
+            isActive={pathname === "/activity"}
+          />
+        )}
       </nav>
     </aside>
   );

@@ -1,30 +1,133 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import Link from "next/link";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { getDashboardSummary } from "@/lib/api";
-import { queryKeys } from "@/lib/queryKeys";
+import { getDashboardSummary, getPlatformOrgs, getPlatformOrgDetails } from "@/lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileCheck, RotateCcw, Users, Server, FilePlus, AlertCircle } from "lucide-react";
+import { Building2, Users, FileCheck, X } from "lucide-react";
+
+function StatCard({ title, value }: { title: string; value: number }) {
+  return (
+    <div className="bg-white border rounded-2xl p-4 shadow-sm">
+      <p className="text-sm text-slate-500">{title}</p>
+      <p className="text-2xl font-semibold mt-1">{value.toLocaleString()}</p>
+    </div>
+  );
+}
+
+function OrgDetailsDrawer({
+  orgId,
+  onClose,
+}: {
+  orgId: string | null;
+  onClose: () => void;
+}) {
+  const { data: orgDetails, isLoading } = useQuery({
+    queryKey: ["platform-org-details", orgId],
+    queryFn: () => getPlatformOrgDetails(orgId!),
+    enabled: !!orgId,
+  });
+
+  if (!orgId) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-30 flex justify-end z-50">
+      <div className="bg-white w-full max-w-md h-full shadow-lg overflow-y-auto">
+        <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-slate-900">
+            {isLoading ? "Loading..." : orgDetails?.name || "Organization Details"}
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-slate-100 rounded-md transition-colors"
+          >
+            <X className="h-5 w-5 text-slate-500" />
+          </button>
+        </div>
+
+        {isLoading ? (
+          <div className="p-6">
+            <Skeleton className="h-4 w-full mb-2" />
+            <Skeleton className="h-4 w-3/4 mb-4" />
+            <Skeleton className="h-20 w-full" />
+          </div>
+        ) : orgDetails ? (
+          <div className="p-6 space-y-6">
+            <div>
+              <p className="text-sm text-slate-500 mb-1">Region</p>
+              <p className="text-sm font-medium text-slate-900">{orgDetails.region}</p>
+            </div>
+
+            <div>
+              <p className="text-sm text-slate-500 mb-1">API Key</p>
+              <p className="text-xs text-slate-600 break-all font-mono bg-slate-50 p-2 rounded">
+                {orgDetails.api_key}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-sm text-slate-500 mb-2">Consent Stats</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-slate-50 p-2 rounded">
+                  <p className="text-xs text-slate-500">Active</p>
+                  <p className="text-lg font-semibold">{orgDetails.consents_active || 0}</p>
+                </div>
+                <div className="bg-slate-50 p-2 rounded">
+                  <p className="text-xs text-slate-500">Total</p>
+                  <p className="text-lg font-semibold">{orgDetails.consents_total || 0}</p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-sm text-slate-500 mb-2">Users ({orgDetails.users?.length || 0})</p>
+              <div className="space-y-1">
+                {orgDetails.users?.map((user: any) => (
+                  <div
+                    key={user.id}
+                    className="flex items-center justify-between p-2 bg-slate-50 rounded text-sm"
+                  >
+                    <span className="text-slate-700">{user.email}</span>
+                    <span className="text-xs text-slate-500 bg-white px-2 py-0.5 rounded">
+                      {user.role}
+                    </span>
+                  </div>
+                ))}
+                {(!orgDetails.users || orgDetails.users.length === 0) && (
+                  <p className="text-sm text-slate-400 italic">No users</p>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
 
 export default function DashboardPage() {
-  const { activeOrgId, user, isLoading: authLoading } = useAuth();
-  const router = useRouter();
+  const { user, isSuperadmin, scope, isLoading: authLoading } = useAuth();
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
 
-  // Redirect to create-org if user has no orgs (and not superadmin)
-  useEffect(() => {
-    if (!authLoading && user && !user.is_superadmin && (!user.orgs || user.orgs.length === 0)) {
-      router.replace("/create-org");
-    }
-  }, [authLoading, user, router]);
+  // Platform overview for superadmins
+  const { data: platformSummary } = useQuery({
+    queryKey: ["dashboard-summary", "platform"],
+    queryFn: () => getDashboardSummary(),
+    enabled: isSuperadmin && scope === "platform",
+  });
 
-  const { data: summary, isLoading, error } = useQuery({
-    queryKey: queryKeys.dashboardSummary(activeOrgId || ""),
-    queryFn: () => getDashboardSummary(activeOrgId || undefined),
-    enabled: !authLoading && !!user && (!!activeOrgId || user.is_superadmin), // Only fetch if we have user context
+  const { data: platformOrgs } = useQuery({
+    queryKey: ["platform-orgs"],
+    queryFn: () => getPlatformOrgs(),
+    enabled: isSuperadmin && scope === "platform",
+  });
+
+  // Org dashboard for regular users
+  const { data: orgSummary, isLoading: orgLoading } = useQuery({
+    queryKey: ["dashboard-summary", "org"],
+    queryFn: () => getDashboardSummary(),
+    enabled: !isSuperadmin && scope === "org" && !!user?.orgs?.[0]?.org_id,
   });
 
   if (authLoading) {
@@ -50,42 +153,80 @@ export default function DashboardPage() {
     );
   }
 
-  // Show message if no orgs found
-  if (!authLoading && user && !user.is_superadmin && (!user.orgs || user.orgs.length === 0)) {
+  // Platform Overview for Superadmins
+  if (isSuperadmin && scope === "platform") {
     return (
-      <section>
-        <div className="mb-4">
-          <h2 className="text-2xl font-semibold text-slate-900 tracking-tight">
-            Consent Management Overview
-          </h2>
-          <p className="text-sm text-slate-500">
-            Monitor your organization's consent and compliance activity
-          </p>
+      <section className="space-y-8">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">Platform Overview</h1>
+          <p className="text-sm text-slate-500 mt-1">System-wide visibility for superadmins</p>
         </div>
-        <div className="rounded-2xl bg-yellow-50 border border-yellow-200 shadow-sm p-6 mt-6">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-yellow-600" />
-            <div>
-              <p className="text-sm font-medium text-yellow-800">
-                No organization found
-              </p>
-              <p className="text-sm text-yellow-700 mt-1">
-                Please create an organization to get started.
-              </p>
-              <Link
-                href="/create-org"
-                className="mt-3 inline-block bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-md text-sm font-medium"
-              >
-                Create Organization
-              </Link>
-            </div>
+
+        {platformSummary && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard title="Organizations" value={platformSummary.orgs || 0} />
+            <StatCard title="Users" value={platformSummary.users || 0} />
+            <StatCard title="Consents" value={platformSummary.consents || 0} />
+            <StatCard title="Revocations" value={platformSummary.revocations || 0} />
+          </div>
+        )}
+
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900 mb-4">Organizations</h2>
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            {platformOrgs ? (
+              <table className="min-w-full text-sm">
+                <thead className="border-b bg-slate-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium text-slate-700">Name</th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-700">Region</th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-700">Users</th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-700">Consents</th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-700">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {platformOrgs.map((org: any) => (
+                    <tr key={org.id} className="border-t hover:bg-slate-50 transition-colors">
+                      <td className="px-4 py-3 text-slate-900">{org.name}</td>
+                      <td className="px-4 py-3 text-slate-600">{org.region}</td>
+                      <td className="px-4 py-3 text-slate-600">{org.users}</td>
+                      <td className="px-4 py-3 text-slate-600">{org.consents}</td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => setSelectedOrgId(org.id)}
+                          className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors"
+                        >
+                          View Details
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {platformOrgs.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
+                        No organizations found
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            ) : (
+              <div className="p-8 text-center text-slate-500">
+                <Skeleton className="h-4 w-full mb-2" />
+                <Skeleton className="h-4 w-3/4 mx-auto" />
+              </div>
+            )}
           </div>
         </div>
+
+        <OrgDetailsDrawer orgId={selectedOrgId} onClose={() => setSelectedOrgId(null)} />
       </section>
     );
   }
 
-  if (isLoading) {
+  // Org Dashboard for Regular Users
+  if (orgLoading) {
     return (
       <section>
         <div className="mb-4">
@@ -108,107 +249,23 @@ export default function DashboardPage() {
     );
   }
 
-  if (error) {
-    return (
-      <section>
-        <div className="mb-4">
-          <h2 className="text-2xl font-semibold text-slate-900 tracking-tight">
-            Consent Management Overview
-          </h2>
-          <p className="text-sm text-slate-500">
-            Monitor your organization's consent and compliance activity
-          </p>
-        </div>
-        <div className="rounded-2xl bg-red-50 border border-red-200 shadow-sm p-6 mt-6">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-red-600" />
-            <p className="text-sm text-red-700">
-              Failed to load dashboard data. Please try again later.
-            </p>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-  if (!summary) {
-    return (
-      <section>
-        <div className="mb-4">
-          <h2 className="text-2xl font-semibold text-slate-900 tracking-tight">
-            Consent Management Overview
-          </h2>
-          <p className="text-sm text-slate-500">
-            Monitor your organization's consent and compliance activity
-          </p>
-        </div>
-        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-6">
-          <p className="text-sm text-slate-500">No stats found.</p>
-        </div>
-      </section>
-    );
-  }
-
-  const stats = {
-    consents_total: summary.consents_active || 0,
-    revocations_total: summary.revocations || 0,
-    subjects_total: 0, // Not available in summary endpoint
-    api_calls_total: summary.consents_active || 0,
-    dsar_completed: summary.dsar_completed || 0,
-  };
-
-  const hasData =
-    stats.consents_total > 0 ||
-    stats.revocations_total > 0 ||
-    stats.dsar_completed > 0;
-
-  const cards = [
-    { label: "Active Consents", href: "/consents", Icon: FileCheck, value: stats.consents_total },
-    {
-      label: "Revocations",
-      href: "/consents?tab=revocations",
-      Icon: RotateCcw,
-      value: stats.revocations_total,
-    },
-    { label: "DSAR Completed", href: "/data-rights", Icon: Users, value: stats.dsar_completed },
-    { label: "API Calls", href: "/api-logs", Icon: Server, value: stats.api_calls_total },
-  ];
-
   return (
     <section>
-      <h2 className="text-2xl font-semibold text-slate-900 tracking-tight">
-        Consent Management Overview
-      </h2>
-      <p className="text-sm text-slate-500">
-        {summary.org ? `Organization: ${summary.org}` : "Monitor your organization's consent and compliance activity"}
-      </p>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mt-6">
-        {cards.map(({ label, href, Icon, value }) => (
-          <Link
-            key={label}
-            href={href}
-            className="cursor-pointer flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-150 ease-in-out"
-          >
-            <Icon className="h-5 w-5 text-blue-600 mb-2" />
-            <p className="text-sm text-slate-500">{label}</p>
-            <p className="text-3xl font-semibold text-slate-800 mt-1">{value.toLocaleString()}</p>
-          </Link>
-        ))}
+      <div className="mb-4">
+        <h2 className="text-2xl font-semibold text-slate-900 tracking-tight">
+          Organization Dashboard
+        </h2>
+        <p className="text-sm text-slate-500">
+          Monitor consent metrics for your organization
+        </p>
       </div>
 
-      {!hasData && (
-        <div className="mt-8 flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/60 p-8 text-center">
-          <FilePlus className="h-8 w-8 text-blue-600 mb-3" />
-          <p className="text-sm text-slate-600">
-            No records yet. Start capturing data by integrating the ConsentVault SDK.
-          </p>
-          <Link
-            href="/docs/integration"
-            className="mt-3 inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition"
-          >
-            View Integration Guide
-          </Link>
+      {orgSummary && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+          <StatCard title="Consents" value={orgSummary.consents_active || 0} />
+          <StatCard title="Revocations" value={orgSummary.revocations || 0} />
+          <StatCard title="DSAR Completed" value={orgSummary.dsar_completed || 0} />
+          <StatCard title="API Calls" value={orgSummary.consents_active || 0} />
         </div>
       )}
     </section>

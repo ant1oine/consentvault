@@ -11,12 +11,16 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export function OrgDropdown() {
-  const { user, activeOrgId, setActiveOrgId } = useAuth();
+  const { user, activeOrgId, setActiveOrgId, isSuperadmin } = useAuth();
+  
+  // Superadmins don't have orgs and can't switch - hide the dropdown
+  if (isSuperadmin || !user?.orgs || user.orgs.length === 0) {
+    return null;
+  }
+
   const orgIndex =
-    user?.orgs?.findIndex((org) => org.org_id === activeOrgId) ?? 0;
-  const orgName = user?.orgs?.[orgIndex]
-    ? `${user.orgs[orgIndex].role === "admin" ? "Admin" : "Member"} Org ${orgIndex + 1}`
-    : "Admin Org 1";
+    user?.orgs?.findIndex((org) => org.org_id === activeOrgId || org.id === activeOrgId) ?? 0;
+  const orgName = user?.orgs?.[orgIndex]?.name || `Org ${orgIndex + 1}`;
 
   return (
     <DropdownMenu>
@@ -27,14 +31,20 @@ export function OrgDropdown() {
         <Building2 className="h-5 w-5 text-blue-600" />
       </DropdownMenuTrigger>
       <DropdownMenuContent className="right-0 left-auto min-w-[180px]">
-        {user?.orgs?.map((org, i) => (
-          <DropdownMenuItem
-            key={org.org_id}
-            onClick={() => setActiveOrgId(org.org_id)}
-          >
-            {org.role === "admin" ? "Admin" : "Member"} Org {i + 1}
-          </DropdownMenuItem>
-        ))}
+        {user.orgs.map((org) => {
+          const orgId = org.org_id || org.id;
+          const isActive = orgId === activeOrgId;
+          return (
+            <DropdownMenuItem
+              key={orgId}
+              onClick={() => orgId && setActiveOrgId(orgId)}
+              className={isActive ? "bg-slate-100 font-medium" : ""}
+            >
+              {org.name || `Org ${org.role}`}
+              {org.role && <span className="ml-2 text-xs text-slate-500">({org.role})</span>}
+            </DropdownMenuItem>
+          );
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   );

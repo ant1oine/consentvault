@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api";
+import { apiFetchAuthed } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,7 +15,7 @@ export default function ApiLogsPage() {
 
   useEffect(() => {
     // Use consents as audit events (showing consent creation/revocation activity)
-    apiFetch("/consents?limit=200")
+    apiFetchAuthed("/consents?limit=200")
       .then((consents: any[]) => {
         // Transform consents into audit-like events
         const events = consents.map((c) => ({

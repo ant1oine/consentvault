@@ -2,13 +2,11 @@
 Seed initial data: organizations and users.
 Can be safely re-run (skips if already exists).
 """
-import sys
 import os
-import secrets
+import sys
 
-# Ensure the app package inside /app/app is discoverable
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.append("/app")
+sys.path.append(os.path.abspath(os.path.dirname(os.path.abspath(__file__)) + "/.."))
+import secrets
 
 from app.db import SessionLocal, Org, OrgMember
 

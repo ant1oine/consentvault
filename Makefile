@@ -1,4 +1,4 @@
-.PHONY: dev dev-d dev-reset create-user migrate prod down logs clean ps seed qa
+.PHONY: dev dev-d dev-reset reset create-user org user assign promote promote-superadmin logs migrate prod down logs-follow clean ps seed qa
 
 # Run development environment with hot reload
 dev:
@@ -26,21 +26,58 @@ dev-reset:
 	@echo "▶️  Restarting API..."
 	docker compose -f docker-compose.dev.yml start api || docker compose -f docker-compose.dev.yml up -d api
 	@echo "🔍 Verifying schema..."
-	docker compose -f docker-compose.dev.yml exec api python -c "from app.db import SessionLocal, Org, User, Consent; db = SessionLocal(); org_count = db.query(Org).count(); user_count = db.query(User).count(); consent_count = db.query(Consent).count(); print(f'✅ DB verified: {org_count} orgs, {user_count} users, {consent_count} consents'); db.close()" || true
+	docker compose -f docker-compose.dev.yml exec -w /app api python -c "from app.db import SessionLocal, Org, User, Consent; db = SessionLocal(); org_count = db.query(Org).count(); user_count = db.query(User).count(); consent_count = db.query(Consent).count(); print(f'✅ DB verified: {org_count} orgs, {user_count} users, {consent_count} consents'); db.close()" || true
 	@echo "✅ Database fully reset — clean schema, no users, orgs, or data exist."
-	@echo "👉 Next step: run 'make create-user EMAIL=admin@consentvault.ae PASSWORD=SuperSecure123 SUPERADMIN=true' to add your superadmin manually."
+	@echo ""
+	@echo "👉 Next step: create superadmin manually with:"
+	@echo "   make create-user EMAIL=antoine@test.com PASSWORD=antoine SUPERADMIN=true"
 
-# Create first admin user for local testing
+# 🧹 Quick reset (simpler version)
+reset:
+	@echo "🧹 Quick reset..."
+	docker compose -f docker-compose.dev.yml down -v
+	docker compose -f docker-compose.dev.yml build
+	docker compose -f docker-compose.dev.yml up -d
+	@echo "⏳ Waiting for services to be ready..."
+	sleep 15
+	docker compose -f docker-compose.dev.yml exec -w /app api python scripts/fix_schema.py || true
+	@echo "✅ Reset complete. Run migrations if needed: make migrate"
+
+# 🧑‍💼 Superadmin creation (non-interactive, explicit flag required)
 create-user:
 	@if [ -z "$(EMAIL)" ] || [ -z "$(PASSWORD)" ]; then \
 		echo "Usage: make create-user EMAIL=user@example.com PASSWORD=secret123 [SUPERADMIN=true]"; \
 		exit 1; \
 	fi
 	@if [ "$(SUPERADMIN)" = "true" ]; then \
-		docker compose -f docker-compose.dev.yml exec api python scripts/create_user.py $(EMAIL) $(PASSWORD) --superadmin; \
+		docker compose -f docker-compose.dev.yml exec -w /app api python scripts/create_user.py $(EMAIL) $(PASSWORD) --superadmin; \
 	else \
-		docker compose -f docker-compose.dev.yml exec api python scripts/create_user.py $(EMAIL) $(PASSWORD); \
+		docker compose -f docker-compose.dev.yml exec -w /app api python scripts/create_user.py $(EMAIL) $(PASSWORD); \
 	fi
+
+# 🏢 Create organization (interactive, safe)
+org:
+	docker compose -f docker-compose.dev.yml exec -it -w /app api python scripts/create_org.py
+
+# 👤 Create regular user (interactive, safe - no superadmin option)
+user:
+	docker compose -f docker-compose.dev.yml exec -it -w /app api python scripts/create_user_safe.py
+
+# 🔗 Assign user to organization (interactive, safe)
+assign:
+	docker compose -f docker-compose.dev.yml exec -it -w /app api python scripts/assign_user_to_org.py
+
+# 👤 Promote or demote user role within org (viewer ↔ manager ↔ admin)
+promote:
+	docker compose -f docker-compose.dev.yml exec -it -w /app api python scripts/promote_org_role.py
+
+# 🚀 Promote user to global superadmin (rare, audited, requires confirmation)
+promote-superadmin:
+	docker compose -f docker-compose.dev.yml exec -it -w /app api python scripts/promote_user.py
+
+# 📜 View latest audit logs
+logs:
+	docker compose -f docker-compose.dev.yml exec -T db psql -U $${DB_USER:-consentvault} -d $${DB_NAME:-consentvault} -c "SELECT created_at, action as event_type, user_email as actor, metadata_json as details FROM audit_logs ORDER BY created_at DESC LIMIT 20;"
 
 # Run database migrations (upgrade to latest)
 migrate:
@@ -54,8 +91,8 @@ prod:
 down:
 	docker compose down -v
 
-# View live logs
-logs:
+# View live container logs
+logs-follow:
 	docker compose -f docker-compose.dev.yml logs -f
 
 # Clean everything and rebuild from scratch
@@ -70,7 +107,7 @@ ps:
 
 # Test database connection
 seed:
-	docker compose exec api python -c "from app.db import SessionLocal; s=SessionLocal(); print('✅ Database connection OK')"
+	docker compose exec -w /app api python -c "from app.db import SessionLocal; s=SessionLocal(); print('✅ Database connection OK')"
 
 # -------------------------------
 # 🧪 Run Full Integration Tests
@@ -81,7 +118,7 @@ qa:
 	@echo "⏳ Waiting for services to be ready..."
 	sleep 10
 	@echo "🔄 Ensuring database schema is up to date..."
-	docker compose -f docker-compose.dev.yml exec api python -c "from app.db import init_db; init_db()" || true
-	docker compose -f docker-compose.dev.yml exec api python /app/scripts/fix_schema.py || true
-	docker compose -f docker-compose.dev.yml exec api python /app/scripts/test_all.py
+	docker compose -f docker-compose.dev.yml exec -w /app api python -c "from app.db import init_db; init_db()" || true
+	docker compose -f docker-compose.dev.yml exec -w /app api python scripts/fix_schema.py || true
+	docker compose -f docker-compose.dev.yml exec -w /app api python scripts/test_all.py
 	@echo "✅ QA tests completed successfully!"

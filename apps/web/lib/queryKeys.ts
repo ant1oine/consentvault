@@ -3,11 +3,11 @@
  */
 
 export const queryKeys = {
-  consents: (params?: { limit?: number; offset?: number; apiKey?: string }) => [
+  consents: (params?: { limit?: number; offset?: number; orgId?: string }) => [
     'consents',
     params?.limit,
     params?.offset,
-    params?.apiKey,
+    params?.orgId,
   ],
   dashboardSummary: (orgId: string) => ['dashboard', 'summary', orgId],
   orgDetails: (orgId: string) => ['orgs', orgId],

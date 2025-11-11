@@ -21,17 +21,15 @@ def list_orgs(
     """List organizations accessible to the current user."""
     # Superadmins can see all orgs
     if current_user.is_superadmin:
-        orgs = db.query(Org).all()
-        return orgs
+        return db.query(Org).all()
     
-    # Regular users see only orgs they're members of
-    memberships = db.query(OrgUser).filter(OrgUser.user_id == current_user.id).all()
-    org_ids = [m.org_id for m in memberships]
-    if not org_ids:
-        return []  # Return empty list, not 500
-    
-    orgs = db.query(Org).filter(Org.id.in_(org_ids)).all()
-    return orgs
+    # Regular users see only orgs they're members of (via join)
+    return (
+        db.query(Org)
+        .join(OrgUser)
+        .filter(OrgUser.user_id == current_user.id)
+        .all()
+    )
 
 
 @router.post("", response_model=OrgOut, status_code=status.HTTP_201_CREATED)
@@ -52,8 +50,8 @@ def create_org(
     db.add(org)
     db.flush()  # Flush to get org.id
     
-    # Add creator as admin member if not superadmin (superadmins can be added separately)
-    # For superadmins, optionally add them as admin if they want
+    # Only add creator as admin member if they are NOT a superadmin
+    # Superadmins operate at platform level and should NOT be linked to orgs
     if not current_user.is_superadmin:
         # Regular users are automatically added as admin
         membership = OrgUser(
@@ -62,14 +60,7 @@ def create_org(
             role="admin",
         )
         db.add(membership)
-    else:
-        # For superadmins, add them as admin member so they can manage the org
-        membership = OrgUser(
-            org_id=org.id,
-            user_id=current_user.id,
-            role="admin",
-        )
-        db.add(membership)
+    # Superadmins are NOT added to orgs - they manage orgs from platform level
     
     db.commit()
     db.refresh(org)

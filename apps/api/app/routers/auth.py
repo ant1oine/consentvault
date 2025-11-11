@@ -59,44 +59,41 @@ def get_current_user_info(
     db: Session = Depends(get_db),
 ):
     """Get current authenticated user information with org memberships."""
-    # Superadmin can see all orgs or none
+    # Superadmins operate at platform level - not tied to any org
     if current_user.is_superadmin:
-        # For superadmins, return all orgs they have access to (via OrgUser if any)
-        memberships = db.query(OrgUser).filter(OrgUser.user_id == current_user.id).all()
-        orgs = []
-        for membership in memberships:
-            org = db.query(Org).filter(Org.id == membership.org_id).first()
-            if org:
-                orgs.append({
-                    "id": str(org.id),
-                    "org_id": str(org.id),  # For compatibility
-                    "name": org.name,
-                    "role": membership.role,
-                })
-        
         return {
             "id": str(current_user.id),
             "email": current_user.email,
             "is_superadmin": True,
-            "orgs": orgs,
+            "orgs": [],  # Superadmins don't belong to orgs
         }
 
-    # Regular user - get org memberships with org details
-    memberships = db.query(OrgUser).filter(OrgUser.user_id == current_user.id).all()
-    orgs = []
-    for membership in memberships:
-        org = db.query(Org).filter(Org.id == membership.org_id).first()
-        if org:
-            orgs.append({
-                "id": str(org.id),
-                "org_id": str(org.id),  # For compatibility
-                "name": org.name,
-                "role": membership.role,
-            })
+    # Regular user - get org memberships with org details via join
+    orgs = (
+        db.query(Org)
+        .join(OrgUser)
+        .filter(OrgUser.user_id == current_user.id)
+        .all()
+    )
+
+    # Build org list with role information
+    org_list = []
+    for org in orgs:
+        membership = (
+            db.query(OrgUser)
+            .filter(OrgUser.org_id == org.id, OrgUser.user_id == current_user.id)
+            .first()
+        )
+        org_list.append({
+            "id": str(org.id),
+            "org_id": str(org.id),  # For compatibility
+            "name": org.name,
+            "role": membership.role if membership else "viewer",
+        })
 
     return {
         "id": str(current_user.id),
         "email": current_user.email,
         "is_superadmin": False,
-        "orgs": orgs,
+        "orgs": org_list,
     }

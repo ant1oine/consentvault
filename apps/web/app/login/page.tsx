@@ -68,11 +68,15 @@ export default function LoginPage() {
           // Wait a bit to ensure cookie is flushed before redirect
           await new Promise((r) => setTimeout(r, 300));
           
-          // Redirect based on org status
-          if (me.orgs?.length > 0 || me.is_superadmin) {
+          // Redirect based on user type
+          if (me.is_superadmin) {
+            // Superadmins go to platform dashboard
+            router.push("/dashboard");
+          } else if (me.orgs?.length > 0) {
+            // Regular users with orgs go to org dashboard
             router.push("/dashboard");
           } else {
-            // No orgs - redirect to create-org
+            // Regular users without orgs go to create-org
             router.push("/create-org");
           }
         } else {
