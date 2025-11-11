@@ -62,6 +62,9 @@ export function PageShell({ children }: { children: React.ReactNode }) {
 }
 
 function Header({ searchRef }: { searchRef: React.RefObject<HTMLInputElement> }) {
+  const { user, activeOrgId, logout } = useAuth();
+  const router = useRouter();
+
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur-md">
       <div className="flex items-center justify-between h-14 px-6 w-full">
@@ -83,20 +86,63 @@ function Header({ searchRef }: { searchRef: React.RefObject<HTMLInputElement> })
           <kbd className="absolute right-2 top-[6px] text-[10px] text-slate-400">⌘K</kbd>
         </div>
 
-        {/* Right: org dropdown - extreme right */}
-        <div className="flex items-center flex-shrink-0">
+        {/* Right: org dropdown + user dropdown */}
+        <div className="flex items-center flex-shrink-0 gap-6">
           <OrgDropdown />
+          <UserDropdown user={user} activeOrgId={activeOrgId} logout={logout} router={router} />
         </div>
       </div>
     </header>
   );
 }
 
-/** Sidebar with bottom-left user block */
+function UserDropdown({
+  user,
+  activeOrgId,
+  logout,
+  router,
+}: {
+  user: any;
+  activeOrgId: string | null;
+  logout: () => void;
+  router: any;
+}) {
+  const activeOrg = user?.orgs?.find((org) => org.org_id === activeOrgId);
+  const userRole = activeOrg?.role === "admin" ? "Administrator" : "Member";
+  const userName = user?.email?.split("@")[0] || "Admin";
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        showChevron={false}
+        className="flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-slate-900 transition-all"
+      >
+        <span>{userName}</span>
+        <ChevronDown className="h-4 w-4" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="right-0 left-auto min-w-[200px] rounded-md border border-slate-200 bg-white shadow-lg text-sm py-2">
+        {/* User info header */}
+        <div className="px-3 py-2 border-b border-slate-100">
+          <div className="font-medium text-slate-900">{userName}</div>
+          <div className="text-xs text-slate-500 mt-0.5">{userRole}</div>
+        </div>
+        <DropdownMenuItem onClick={() => router.push("/profile")}>
+          Profile
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.push("/settings")}>
+          Settings
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={logout} className="text-red-600 hover:bg-red-50">
+          Log Out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** Sidebar */
 function Sidebar() {
   const pathname = usePathname();
-  const router = useRouter();
-  const { user, logout } = useAuth();
 
   const items = [
     { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
@@ -117,32 +163,6 @@ function Sidebar() {
           <NavLink key={i.href} {...i} active={pathname === i.href} />
         ))}
       </nav>
-
-      {/* bottom user menu */}
-      <div className="border-t border-slate-200 p-3">
-        <div className="relative">
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              showChevron={false}
-              className="w-full flex items-center justify-between text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-md px-3 py-2"
-            >
-              <span>{user?.email?.split("@")[0] || "Admin User"}</span>
-              <ChevronDown className="h-4 w-4" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="!left-0 !right-auto !bottom-full !top-auto !mb-1 !mt-0 w-[calc(200px-24px)] rounded-md border border-slate-200 bg-white shadow-lg text-sm">
-              <DropdownMenuItem onClick={() => router.push("/profile")}>
-                Profile
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => router.push("/settings")}>
-                Settings
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={logout} className="text-red-600 hover:bg-red-50">
-                Log Out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
     </div>
   );
 }

@@ -22,12 +22,11 @@ export function OrgDropdown() {
     <DropdownMenu>
       <DropdownMenuTrigger
         showChevron={false}
-        className="flex items-center gap-2 border border-slate-200 rounded-md px-3 h-9 text-sm text-slate-700 hover:bg-slate-50"
+        className="flex items-center justify-center p-1.5 text-slate-700 hover:text-slate-900 transition-colors"
       >
-        <Building2 className="h-4 w-4 text-blue-600" />
-        {orgName} ▾
+        <Building2 className="h-5 w-5 text-blue-600" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent>
+      <DropdownMenuContent className="right-0 left-auto min-w-[180px]">
         {user?.orgs?.map((org, i) => (
           <DropdownMenuItem
             key={org.org_id}
