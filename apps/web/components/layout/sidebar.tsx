@@ -2,83 +2,73 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
-import { LayoutDashboard, Activity, FileCheck, UserCog, History, ShieldCheck } from "lucide-react";
-import { useAuth } from "@/components/providers/AuthProvider";
-
-function SidebarLink({
-  icon: Icon,
-  label,
-  href,
-  isActive,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  href: string;
-  isActive: boolean;
-}) {
-  return (
-    <Link
-      href={href}
-      className={cn(
-        "relative flex items-center gap-2 px-3 py-2 rounded-md font-medium text-slate-800 hover:bg-slate-100 transition-all",
-        isActive && "bg-slate-100 before:absolute before:left-0 before:w-[3px] before:h-full before:bg-blue-600"
-      )}
-    >
-      <Icon className="h-4 w-4 text-blue-600" />
-      <span className="text-sm">{label}</span>
-    </Link>
-  );
-}
+import { useEffect, useState } from "react";
+import {
+  LayoutDashboard,
+  Server,
+  ClipboardList,
+  ShieldCheck,
+  Activity,
+} from "lucide-react";
+import { getMe } from "@/lib/api";
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { isSuperadmin } = useAuth();
+  const [user, setUser] = useState<{ email: string; role: string } | null>(null);
+
+  useEffect(() => {
+    async function fetchUser() {
+      try {
+        const data = await getMe();
+        // API now returns { email, role } directly
+        setUser({ email: data.email, role: data.role });
+      } catch (err) {
+        console.error("Failed to fetch user info:", err);
+      }
+    }
+    fetchUser();
+  }, []);
+
+  const links = [
+    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/api-logs", label: "API Logs", icon: Server },
+    { href: "/consents", label: "Consents", icon: ClipboardList },
+    { href: "/data-rights", label: "Data Rights", icon: ShieldCheck },
+    { href: "/activity", label: "Activity", icon: Activity },
+  ];
 
   return (
-    <aside className="bg-slate-50 border-r border-slate-200 shadow-inner w-64 min-h-screen flex flex-col">
-      <nav className="flex-1 px-3 py-4 space-y-2">
-        <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-3">
-          Monitoring
-        </div>
-        <SidebarLink
-          icon={LayoutDashboard}
-          label="Dashboard"
-          href="/dashboard"
-          isActive={pathname === "/dashboard"}
-        />
-        <SidebarLink
-          icon={Activity}
-          label="API Logs"
-          href="/api-logs"
-          isActive={pathname === "/api-logs"}
-        />
-
-        <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-3 mt-4">
-          Governance
-        </div>
-        <SidebarLink
-          icon={FileCheck}
-          label="Consents"
-          href="/consents"
-          isActive={pathname === "/consents"}
-        />
-        <SidebarLink
-          icon={ShieldCheck}
-          label="Data Rights"
-          href="/data-rights"
-          isActive={pathname === "/data-rights"}
-        />
-        
-        {isSuperadmin && (
-          <SidebarLink
-            icon={History}
-            label="Activity"
-            href="/activity"
-            isActive={pathname === "/activity"}
-          />
+    <div className="flex flex-col justify-between h-full bg-white text-gray-800">
+      <div className="pt-6 px-4">
+        <h1 className="text-lg font-semibold mb-6">ConsentVault</h1>
+        <nav className="flex flex-col gap-1">
+          {links.map(({ href, label, icon: Icon }) => (
+            <Link
+              key={href}
+              href={href}
+              className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm transition ${
+                pathname === href
+                  ? "bg-gray-100 text-black font-medium"
+                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+              }`}
+            >
+              <Icon size={18} />
+              <span>{label}</span>
+            </Link>
+          ))}
+        </nav>
+      </div>
+      <div className="text-xs text-gray-400 px-4 pb-4">
+        {user ? (
+          <>
+            Logged in as:{" "}
+            <span className="text-gray-600">{user.email}</span> <br />
+            Role: <span className="text-gray-600">{user.role}</span>
+          </>
+        ) : (
+          "Loading user..."
         )}
-      </nav>
-    </aside>
+      </div>
+    </div>
   );
 }

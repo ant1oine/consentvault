@@ -1,63 +1,44 @@
 "use client";
 
-import OrgSwitcher from "./OrgSwitcher";
-import { useAuth } from "@/components/providers/AuthProvider";
+import { useState } from "react";
 import { User } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
+import { logout } from "@/lib/logout";
 
 export default function TopNav() {
-  const { logout, user } = useAuth();
-  
-  // Determine user role: Superadmin > Admin > Member
-  const userRole = user?.is_superadmin
-    ? "Superadmin"
-    : user?.orgs?.[0]?.role === "admin"
-    ? "Admin"
-    : "Member";
-  const userName = user?.email?.split("@")[0] || "Admin";
+  const [open, setOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur-md">
-      <div className="flex items-center justify-between h-14 px-6">
-        <div className="flex items-center gap-3">
-          <h1 className="font-semibold text-slate-900 tracking-tight">ConsentVault</h1>
-          <span className="text-xs text-slate-400">v1.0.3</span>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search logs, consents, or users..."
-              className="h-8 w-64 rounded-md border border-slate-200 bg-slate-50 text-sm px-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <kbd className="absolute right-2 top-1 text-[10px] text-slate-400">⌘ K</kbd>
-          </div>
-          <OrgSwitcher />
-          <DropdownMenu>
-            <DropdownMenuTrigger className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 transition-all">
-              <User className="h-4 w-4" />
-              <span>{userName}</span>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <div className="px-2 py-1.5 text-xs text-slate-500 border-b border-slate-100">
-                {userRole}
-              </div>
-              <DropdownMenuItem>Profile</DropdownMenuItem>
-              <DropdownMenuItem>Settings</DropdownMenuItem>
-              <DropdownMenuItem onClick={logout} className="text-red-600">
-                Log Out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+    <div className="flex items-center justify-between px-4 h-full">
+      <div className="text-sm text-gray-500">
+        <kbd className="border rounded px-2 py-1 text-xs">⌘K</kbd> Command Palette
       </div>
-    </header>
+
+      <div className="relative">
+        <button
+          onClick={() => setOpen(!open)}
+          className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100"
+        >
+          <User className="w-4 h-4 text-gray-600" />
+        </button>
+
+        {open && (
+          <div className="absolute right-0 mt-2 w-48 bg-white border rounded-md shadow-lg text-sm z-50">
+            <div className="px-4 py-2 border-b">Admin</div>
+            <button className="block w-full text-left px-4 py-2 hover:bg-gray-50">
+              Settings
+            </button>
+            <button
+              onClick={() => {
+                setOpen(false);
+                logout();
+              }}
+              className="block w-full text-left px-4 py-2 hover:bg-gray-50 text-red-500"
+            >
+              Logout
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
-

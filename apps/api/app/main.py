@@ -70,7 +70,7 @@ else:
 
 # Include routers
 app.include_router(health.router)
-app.include_router(auth.router, prefix="/v1/auth", tags=["auth"])
+app.include_router(auth.router, prefix="/v1")
 app.include_router(orgs.router)
 app.include_router(users.router)
 app.include_router(consents.router)  # /v1/consents (API key auth)

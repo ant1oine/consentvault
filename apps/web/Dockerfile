@@ -1,21 +1,24 @@
-# Development Dockerfile for Next.js web app
+# Clean rebuild for Next.js web app
 
 FROM node:20-alpine
 
 # Set working directory
 WORKDIR /app
 
-# Copy dependency files
-COPY package.json package-lock.json* pnpm-lock.yaml* ./
+# Enable pnpm via corepack
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
-# Install dependencies
-RUN npm ci || (npm install -g pnpm && pnpm install)
+# Copy dependency files first
+COPY package.json pnpm-lock.yaml ./
 
-# Copy all source files
+# Install all deps (no workspace references)
+RUN pnpm install --frozen-lockfile
+
+# Copy the rest of the app
 COPY . .
 
-# Expose port for Next.js dev server
+# Expose dev port
 EXPOSE 3000
 
-# Start development server (hot reload)
-CMD ["npm", "run", "dev"]
+# Start Next.js
+CMD ["pnpm", "dev"]

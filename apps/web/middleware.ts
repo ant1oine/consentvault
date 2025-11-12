@@ -3,13 +3,11 @@ import type { NextRequest } from "next/server";
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const token = req.cookies.get("access_token")?.value;
 
   // ✅ Public routes (always accessible)
   const publicPaths = [
     "/", // homepage
-    "/login",
-    "/create-org", // Allow access to create-org (will check auth in component)
+    "/login", // login page
     "/privacy",
     "/terms",
     "/contact",
@@ -27,16 +25,9 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // 🔒 Protect everything else
-  if (!token) {
-    const loginUrl = req.nextUrl.clone();
-    loginUrl.pathname = "/login";
-    return NextResponse.redirect(loginUrl);
-  }
-
-  // ✅ Allow access if token exists (validation happens in components)
-  // Note: We don't validate the token here to avoid blocking on every request
-  // Components will handle 401 responses and redirect appropriately
+  // 🔒 Protected routes - AuthGuard component handles client-side protection
+  // Note: Middleware runs server-side and can't access localStorage,
+  // so we rely on AuthGuard for actual authentication checks
   return NextResponse.next();
 }
 

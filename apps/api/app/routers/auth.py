@@ -10,7 +10,7 @@ from app.deps import get_current_user
 from app.schemas import LoginRequest, TokenResponse
 from app.security import create_access_token, hash_password, verify_password
 
-router = APIRouter(tags=["Auth"])
+router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -58,42 +58,27 @@ def get_current_user_info(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get current authenticated user information with org memberships."""
+    """
+    Return basic info about the currently authenticated user.
+    Returns: { "email": "...", "role": "super admin" | "admin" | "editor" | "viewer" | "user" }
+    """
     # Superadmins operate at platform level - not tied to any org
     if current_user.is_superadmin:
         return {
-            "id": str(current_user.id),
             "email": current_user.email,
-            "is_superadmin": True,
-            "orgs": [],  # Superadmins don't belong to orgs
+            "role": "super admin",
         }
 
-    # Regular user - get org memberships with org details via join
-    orgs = (
-        db.query(Org)
-        .join(OrgUser)
+    # Regular user - get their role from first org membership
+    membership = (
+        db.query(OrgUser)
         .filter(OrgUser.user_id == current_user.id)
-        .all()
+        .first()
     )
 
-    # Build org list with role information
-    org_list = []
-    for org in orgs:
-        membership = (
-            db.query(OrgUser)
-            .filter(OrgUser.org_id == org.id, OrgUser.user_id == current_user.id)
-            .first()
-        )
-        org_list.append({
-            "id": str(org.id),
-            "org_id": str(org.id),  # For compatibility
-            "name": org.name,
-            "role": membership.role if membership else "viewer",
-        })
+    role = membership.role if membership else "user"
 
     return {
-        "id": str(current_user.id),
         "email": current_user.email,
-        "is_superadmin": False,
-        "orgs": org_list,
+        "role": role,
     }

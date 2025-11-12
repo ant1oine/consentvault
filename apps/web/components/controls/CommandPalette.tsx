@@ -1,93 +1,83 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
 
-const actions = [
+const PAGES = [
   { label: "Dashboard", href: "/dashboard" },
   { label: "API Logs", href: "/api-logs" },
   { label: "Consents", href: "/consents" },
   { label: "Data Rights", href: "/data-rights" },
-  { label: "Integration Guide", href: "/docs/integration" },
+  { label: "Activity", href: "/activity" },
 ];
 
-export function CommandPalette({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-}) {
-  const router = useRouter();
+export default function CommandPalette() {
+  const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(0);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const items = useMemo(() => PAGES, []);
 
   useEffect(() => {
-    if (open) {
-      setIndex(0); // Reset index when opening
-    }
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "ArrowDown") {
+    const onKey = (e: KeyboardEvent) => {
+      const meta = e.metaKey || e.ctrlKey;
+      if (meta && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        setIndex((i) => (i + 1) % actions.length);
+        setOpen((v) => !v);
+        setIndex(0);
       }
-      if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setIndex((i) => (i - 1 + actions.length) % actions.length);
-      }
+      if (!open) return;
+      if (e.key === "Escape") setOpen(false);
+      if (e.key === "ArrowDown") setIndex((i) => Math.min(i + 1, items.length - 1));
+      if (e.key === "ArrowUp") setIndex((i) => Math.max(i - 1, 0));
       if (e.key === "Enter") {
-        e.preventDefault();
-        router.push(actions[index].href);
-        onOpenChange(false);
-      }
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onOpenChange(false);
+        setOpen(false);
+        router.push(items[index].href);
       }
     };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [open, index, router, onOpenChange]);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, index, items, router]);
 
   if (!open) return null;
 
-  const handleSelect = (href: string) => {
-    router.push(href);
-    onOpenChange(false);
-  };
+  // compute width by longest label
+  const maxLabel = items.reduce((m, it) => (it.label.length > m.length ? it.label : m), "");
+  const aproxWidth = Math.max(360, Math.min(720, maxLabel.length * 14 + 80)); // px heuristic
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/20 flex items-start justify-center pt-24"
-      onClick={() => onOpenChange(false)}
-    >
+    <div className="fixed inset-0 z-50">
+      {/* backdrop */}
+      <div className="absolute inset-0 bg-black/30" onClick={() => setOpen(false)} />
+
+      {/* centered dialog */}
       <div
-        ref={containerRef}
-        className="w-full max-w-xl rounded-xl border border-slate-200 bg-white shadow-xl overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-xl border bg-white shadow-xl"
+        style={{ width: aproxWidth }}
       >
-        <ul className="max-h-72 overflow-auto">
-          {actions.map((a, i) => (
-            <li key={a.href}>
-              <button
-                className={`w-full text-left px-4 py-3 text-sm transition-colors ${
-                  i === index ? "bg-blue-50 text-blue-700 font-medium" : "hover:bg-slate-50 text-slate-700"
-                }`}
-                onClick={() => handleSelect(a.href)}
+        <div className="px-3 py-2 border-b text-sm text-slate-600">Jump to…</div>
+        <ul className="max-h-[60vh] overflow-y-auto py-1">
+          {items.map((it, i) => {
+            const active = i === index;
+            const current = pathname === it.href;
+            return (
+              <li
+                key={it.href}
+                className={`px-3 py-2 text-[15px] ${
+                  active ? "bg-slate-100" : ""
+                } ${current ? "text-slate-900 font-medium" : "text-slate-700"}`}
               >
-                {a.label}
-              </button>
-            </li>
-          ))}
+                {it.label}
+                {current && <span className="ml-2 text-xs text-slate-500">(current)</span>}
+              </li>
+            );
+          })}
         </ul>
+        <div className="px-3 py-2 border-t text-xs text-slate-500">
+          ↑/↓ to navigate • Enter to select • Esc to close
+        </div>
       </div>
     </div>
   );
 }
-

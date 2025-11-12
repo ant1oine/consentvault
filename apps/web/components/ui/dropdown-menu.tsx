@@ -83,9 +83,11 @@ export function DropdownMenuTrigger({
 export function DropdownMenuContent({
   children,
   className,
+  align = "end",
 }: {
   children: React.ReactNode;
   className?: string;
+  align?: "start" | "end";
 }) {
   const context = React.useContext(DropdownMenuContext);
   if (!context) throw new Error("DropdownMenuContent must be used within DropdownMenu");
@@ -95,7 +97,8 @@ export function DropdownMenuContent({
   return (
     <div
       className={cn(
-        "absolute right-0 mt-2 min-w-[160px] rounded-md border border-slate-200 bg-white shadow-lg z-[100] py-1 pointer-events-auto",
+        "absolute mt-2 min-w-[160px] rounded-md border border-slate-200 bg-white shadow-lg z-[100] py-1 pointer-events-auto",
+        align === "end" ? "right-0" : "left-0",
         className
       )}
     >
@@ -133,5 +136,27 @@ export function DropdownMenuItem({
       {children}
     </button>
   );
+}
+
+export function DropdownMenuLabel({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("px-3 py-2 text-sm font-semibold", className)}>
+      {children}
+    </div>
+  );
+}
+
+export function DropdownMenuSeparator({
+  className,
+}: {
+  className?: string;
+}) {
+  return <div className={cn("my-1 h-px bg-slate-200", className)} />;
 }
 

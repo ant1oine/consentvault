@@ -41,18 +41,21 @@ services:
   web:
     build:
       context: ./apps/web
-    command: npm run dev
+      dockerfile: Dockerfile
+    container_name: consentvault-web
+    environment:
+      - PNPM_STORE_DIR=/app/.pnpm-store
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_BASE_URL=http://api:8000
     volumes:
       - ./apps/web:/app
       - /app/node_modules
+      - /app/.pnpm-store
     ports:
       - "3000:3000"
-    environment:
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
-    env_file:
-      - ./apps/web/.env.local
     depends_on:
       - api
+    restart: unless-stopped
 
 volumes:
   consentvault_db_data:
