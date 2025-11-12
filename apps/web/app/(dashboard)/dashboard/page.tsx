@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
+import { Card, CardContent } from "@/components/ui/card";
+import { X } from "lucide-react";
 
 interface DashboardStats {
   scope?: string;
@@ -44,6 +47,8 @@ export default function DashboardPage() {
   const [orgs, setOrgs] = useState<Org[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selectedOrg, setSelectedOrg] = useState<Org | null>(null);
+  const [details, setDetails] = useState<any>(null);
 
   useEffect(() => {
     (async () => {
@@ -68,6 +73,14 @@ export default function DashboardPage() {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (!selectedOrg) return;
+
+    apiFetch(`/orgs/${selectedOrg.id}/details`)
+      .then(setDetails)
+      .catch(() => setDetails(null));
+  }, [selectedOrg]);
 
   if (loading) {
     return (
@@ -134,7 +147,10 @@ export default function DashboardPage() {
                       <td className="py-2 px-4">{org.api_logs}</td>
                       <td className="py-2 px-4">{org.data_rights}</td>
                       <td className="py-2 px-4 text-right">
-                        <button className="text-blue-600 hover:underline">
+                        <button
+                          className="text-blue-600 hover:underline"
+                          onClick={() => setSelectedOrg(org)}
+                        >
                           View →
                         </button>
                       </td>
@@ -144,6 +160,62 @@ export default function DashboardPage() {
               </tbody>
             </table>
           </div>
+
+          <Drawer open={!!selectedOrg} onOpenChange={(open) => { 
+            if (!open) {
+              setSelectedOrg(null);
+              setDetails(null);
+            }
+          }}>
+            <DrawerContent>
+              <DrawerHeader>
+                <div className="flex items-center justify-between">
+                  <DrawerTitle>{details?.name || "Organization Details"}</DrawerTitle>
+                  <button
+                    onClick={() => {
+                      setSelectedOrg(null);
+                      setDetails(null);
+                    }}
+                    className="rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  >
+                    <X className="h-4 w-4" />
+                    <span className="sr-only">Close</span>
+                  </button>
+                </div>
+              </DrawerHeader>
+
+              {details ? (
+                <div className="p-4 space-y-4 overflow-y-auto h-full">
+                  <Card>
+                    <CardContent className="space-y-2 p-4">
+                      <p><span className="font-semibold">Region:</span> {details.region}</p>
+                      <p><span className="font-semibold">Created:</span> {new Date(details.created_at).toLocaleDateString()}</p>
+                      <p><span className="font-semibold">Total Users:</span> {details.users?.length || 0}</p>
+                      <p><span className="font-semibold">Consents:</span> {details.consent_count || 0}</p>
+                      <p><span className="font-semibold">DSARs:</span> {details.dsar_count || 0}</p>
+                    </CardContent>
+                  </Card>
+
+                  {details.users && details.users.length > 0 && (
+                    <Card>
+                      <CardContent className="p-4">
+                        <h2 className="font-semibold mb-2">Users</h2>
+                        <ul className="space-y-1">
+                          {details.users.map((u: any) => (
+                            <li key={u.email} className="text-sm">
+                              {u.email} <span className="text-gray-500">({u.role})</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              ) : (
+                <div className="p-4 text-gray-500">Loading details...</div>
+              )}
+            </DrawerContent>
+          </Drawer>
         </div>
       ) : (
         <div>

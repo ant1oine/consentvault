@@ -12,13 +12,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { EventDetailsModal } from "@/components/modals/EventDetailsModal";
 
 interface AuditLog {
   timestamp: string;
@@ -334,57 +329,12 @@ export default function ActivityPage() {
         </div>
       ))}
 
-      {/* Details Dialog */}
-      <Dialog
+      {/* Event Details Modal */}
+      <EventDetailsModal
         open={!!selectedLog}
         onOpenChange={(open) => !open && setSelectedLog(null)}
-      >
-        <DialogContent
-          className="max-w-2xl max-h-[80vh] overflow-y-auto"
-          onClose={() => setSelectedLog(null)}
-        >
-          <DialogHeader>
-            <DialogTitle>Event Details</DialogTitle>
-          </DialogHeader>
-          {selectedLog && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="font-medium text-slate-600">Actor:</span>
-                  <p className="text-slate-900">{selectedLog.actor || "System"}</p>
-                </div>
-                <div>
-                  <span className="font-medium text-slate-600">Event Type:</span>
-                  <p className="text-slate-900">{formatEventType(selectedLog.event_type)}</p>
-                </div>
-                <div>
-                  <span className="font-medium text-slate-600">Timestamp:</span>
-                  <p className="text-slate-900">
-                    {new Intl.DateTimeFormat("en-US", {
-                      dateStyle: "full",
-                      timeStyle: "long",
-                    }).format(new Date(selectedLog.timestamp))}
-                  </p>
-                </div>
-                <div>
-                  <span className="font-medium text-slate-600">Target:</span>
-                  <p className="text-slate-900">{getTargetEntity(selectedLog)}</p>
-                </div>
-              </div>
-              {selectedLog.details && Object.keys(selectedLog.details).length > 0 && (
-                <div>
-                  <span className="font-medium text-slate-600 block mb-2">
-                    Metadata:
-                  </span>
-                  <pre className="p-4 text-xs bg-slate-50 rounded-md overflow-auto border border-slate-200">
-                    {JSON.stringify(selectedLog.details, null, 2)}
-                  </pre>
-                </div>
-              )}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+        event={selectedLog}
+      />
     </div>
   );
 }

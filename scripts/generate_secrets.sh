@@ -15,3 +15,4 @@ echo "✅ Copy these values to your .env file"
 
 
 
+

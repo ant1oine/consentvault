@@ -139,6 +139,44 @@ def get_org(
     )
 
 
+@router.get("/{org_id}/details")
+def get_org_details(
+    org_id: UUID = Path(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get organization details with users, consent stats, and DSAR stats."""
+    org = db.query(Org).filter(Org.id == org_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    # Only superadmins can access this endpoint
+    if not current_user.is_superadmin:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    users = (
+        db.query(OrgUser, User)
+        .join(User, OrgUser.user_id == User.id)
+        .filter(OrgUser.org_id == org_id)
+        .all()
+    )
+
+    consents = db.query(Consent).filter(Consent.org_id == org_id).count()
+    dsars = db.query(DataRightRequest).filter(DataRightRequest.org_id == org_id).count()
+
+    return {
+        "id": str(org.id),
+        "name": org.name,
+        "region": getattr(org, "region", "N/A"),
+        "created_at": getattr(org, "created_at", None).isoformat()
+        if hasattr(org, "created_at") and getattr(org, "created_at", None)
+        else None,
+        "users": [{"email": user.email, "role": org_user.role} for org_user, user in users],
+        "consent_count": consents,
+        "dsar_count": dsars,
+    }
+
+
 @router.delete("/{org_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_org(
     org_id: UUID = Path(...),
