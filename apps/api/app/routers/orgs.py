@@ -8,9 +8,31 @@ from sqlalchemy.orm import Session
 from app.db import Org, OrgMember, OrgUser, User, get_db, Consent, AuditLog, DataRightRequest
 from app.deps import get_current_user, require_role
 from app.schemas import OrgCreate, OrgDetailOut, OrgOut, OrgUserCreate
-from app.services.audit_service import log_action
+from app.services.audit_service import log_event
 
 router = APIRouter(prefix="/orgs", tags=["Organizations"])
+
+
+@router.get("/me")
+def my_orgs(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get organizations for the current user."""
+    if current_user.is_superadmin:
+        orgs = db.query(Org).all()
+        return [{"id": str(o.id), "name": o.name, "region": o.region} for o in orgs]
+
+    rows = (
+        db.query(Org, OrgUser.role)
+        .join(OrgUser, OrgUser.org_id == Org.id)
+        .filter(OrgUser.user_id == current_user.id)
+        .all()
+    )
+    return [
+        {"id": str(o.id), "name": o.name, "region": o.region, "role": role}
+        for (o, role) in rows
+    ]
 
 
 @router.get("", response_model=list[OrgOut])
@@ -39,39 +61,30 @@ def create_org(
     db: Session = Depends(get_db),
 ):
     """Create organization with auto-generated API key."""
-    # Generate secure API key
     api_key = secrets.token_hex(16)
-
-    org = Org(
-        name=org_data.name,
-        region=org_data.region,
-        api_key=api_key,
-    )
+    org = Org(name=org_data.name, region=org_data.region, api_key=api_key)
     db.add(org)
-    db.flush()  # Flush to get org.id
+    db.flush()  # Get org.id
     
     # Only add creator as admin member if they are NOT a superadmin
-    # Superadmins operate at platform level and should NOT be linked to orgs
     if not current_user.is_superadmin:
-        # Regular users are automatically added as admin
         membership = OrgUser(
             org_id=org.id,
             user_id=current_user.id,
             role="admin",
         )
         db.add(membership)
-    # Superadmins are NOT added to orgs - they manage orgs from platform level
-    
     db.commit()
     db.refresh(org)
 
     # Log audit action
-    log_action(
-        org_id=org.id,
-        user_email=current_user.email if current_user else None,
+    log_event(
+        db=db,
+        actor=current_user,
         action="created",
         entity_type="org",
         entity_id=org.id,
+        org_id=org.id,
         metadata={"name": org.name, "region": org.region},
     )
 
@@ -85,16 +98,11 @@ def get_org(
     db: Session = Depends(get_db),
 ):
     """Get organization details with users."""
-    # For superadmins, return detailed info with users from OrgUser
     if current_user.is_superadmin:
         org = db.query(Org).filter(Org.id == org_id).first()
         if not org:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Organization not found",
-            )
+            raise HTTPException(status_code=404, detail="Organization not found")
 
-        # Get org users (OrgUser join User)
         users = (
             db.query(OrgUser, User)
             .join(User, OrgUser.user_id == User.id)
@@ -105,26 +113,20 @@ def get_org(
         return {
             "id": str(org.id),
             "name": org.name,
-            "region": org.region if hasattr(org, "region") else "N/A",
-            "created_at": org.created_at.isoformat() if hasattr(org, "created_at") else None,
-            "users": [
-                {"email": user.email, "role": org_user.role}
-                for org_user, user in users
-            ],
+            "region": getattr(org, "region", "N/A"),
+            "created_at": getattr(org, "created_at", None).isoformat()
+            if hasattr(org, "created_at")
+            else None,
+            "users": [{"email": user.email, "role": org_user.role} for org_user, user in users],
             "consents": db.query(Consent).filter(Consent.org_id == org.id).count(),
             "api_logs": db.query(AuditLog).filter(AuditLog.org_id == org.id).count(),
             "data_rights": db.query(DataRightRequest).filter(DataRightRequest.org_id == org.id).count(),
         }
-    
-    # For regular users, use the original response model
+
     org = db.query(Org).filter(Org.id == org_id).first()
     if not org:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Organization not found",
-        )
+        raise HTTPException(status_code=404, detail="Organization not found")
 
-    # Get org members
     members = db.query(OrgMember).filter(OrgMember.org_id == org_id).all()
 
     return OrgDetailOut(
@@ -146,24 +148,21 @@ def delete_org(
     """Delete organization (cascades to users)."""
     org = db.query(Org).filter(Org.id == org_id).first()
     if not org:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Organization not found",
-        )
+        raise HTTPException(status_code=404, detail="Organization not found")
 
     # Log audit action before deletion
-    log_action(
-        org_id=org_id,
-        user_email=current_user.email if current_user else None,
+    log_event(
+        db=db,
+        actor=current_user,
         action="deleted",
         entity_type="org",
         entity_id=org_id,
+        org_id=org_id,
         metadata={"name": org.name},
     )
 
     db.delete(org)
     db.commit()
-
     return None
 
 
@@ -176,56 +175,43 @@ def add_user_to_org(
     db: Session = Depends(get_db),
 ):
     """Add user to organization with role (admin only)."""
-    # Verify org exists
     org = db.query(Org).filter(Org.id == org_id).first()
     if not org:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Organization not found",
-        )
+        raise HTTPException(status_code=404, detail="Organization not found")
 
-    # Verify user exists
     user = db.query(User).filter(User.id == user_data.user_id).first()
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
+        raise HTTPException(status_code=404, detail="User not found")
 
-    # Check if already a member
     existing = (
         db.query(OrgUser)
         .filter(OrgUser.org_id == org_id, OrgUser.user_id == user_data.user_id)
         .first()
     )
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User is already a member of this organization",
-        )
+        raise HTTPException(status_code=400, detail="User is already a member of this organization")
 
-    # Validate role
-    if user_data.role not in ("admin", "editor", "viewer"):
+    # ✅ Dynamic validation against central matrix
+    # Valid org roles: admin, manager, viewer (editor is alias for manager, handled in permissions)
+    valid_roles = ["admin", "manager", "editor", "viewer"]
+    if user_data.role not in valid_roles:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Role must be 'admin', 'editor', or 'viewer'",
+            status_code=400,
+            detail=f"Invalid role '{user_data.role}'. Must be one of: {', '.join(valid_roles)}",
         )
 
     membership = OrgUser(org_id=org_id, user_id=user_data.user_id, role=user_data.role)
     db.add(membership)
     db.commit()
 
-    # Log audit action
-    log_action(
-        org_id=org_id,
-        user_email=current_user.email if current_user else None,
+    log_event(
+        db=db,
+        actor=current_user,
         action="added_user",
         entity_type="org_user",
         entity_id=membership.id,
-        metadata={
-            "user_id": str(user_data.user_id),
-            "role": user_data.role,
-        },
+        org_id=org_id,
+        metadata={"user_id": str(user_data.user_id), "role": user_data.role},
     )
 
     return {
@@ -234,4 +220,3 @@ def add_user_to_org(
         "user_id": str(user_data.user_id),
         "role": user_data.role,
     }
-

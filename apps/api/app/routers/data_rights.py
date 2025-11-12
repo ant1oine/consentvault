@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.db import DataRightRequest, Org, OrgUser, User, get_db
 from app.deps import get_current_org, get_current_user, get_org_by_api_key, get_current_user_optional
 from app.schemas import DataRightRequestBase, DataRightRequestOut, DataRightRequestStatusUpdate
-from app.services.audit_service import log_action
+from app.services.audit_service import log_event
 
 router = APIRouter(prefix="/data-rights", tags=["Data Rights"])
 
@@ -31,12 +31,14 @@ def create_data_right_request(
     db.refresh(req)
 
     # Log audit action
-    log_action(
-        org_id=org.id,
-        user_email=None,  # API key auth, no user email
+    # For API key auth, we use the org as the "actor" context
+    log_event(
+        db=db,
+        actor=org,  # Use org as actor context for API key auth
         action="submitted",
         entity_type="data_right_request",
         entity_id=req.id,
+        org_id=org.id,
         metadata={"type": payload.request_type, "subject_email": payload.subject_email},
     )
 
@@ -137,12 +139,14 @@ def update_data_right_status(
     db.refresh(req)
 
     # Log audit action
-    log_action(
-        org_id=org.id,
-        user_email=None,  # API key auth, no user email
+    # For API key auth, we use the org as the "actor" context
+    log_event(
+        db=db,
+        actor=org,  # Use org as actor context for API key auth
         action=f"marked_{payload.status}",
         entity_type="data_right_request",
         entity_id=req.id,
+        org_id=org.id,
         metadata={"old_status": old_status, "new_status": payload.status},
     )
 

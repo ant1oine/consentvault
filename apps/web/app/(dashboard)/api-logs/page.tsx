@@ -46,9 +46,9 @@ export default function ApiLogsPage() {
   };
 
   const getEndpoint = (log: AuditLog) => {
-    if (log.entity_type === "consent") return `/v1/consents`;
-    if (log.entity_type === "data_right_request") return `/v1/data-rights`;
-    return `/v1/${log.entity_type}`;
+    if (log.entity_type === "consent") return `/consents`;
+    if (log.entity_type === "data_right_request") return `/data-rights`;
+    return `/${log.entity_type}`;
   };
 
   const getMethod = (log: AuditLog) => {

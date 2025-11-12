@@ -27,6 +27,22 @@ export default function LoginPage() {
       });
 
       setAccessToken(data.access_token);
+      
+      // fetch user orgs and set active org
+      try {
+        const me = await apiFetch("/auth/me");
+        if (!me?.is_superadmin) {
+          const orgs = await apiFetch("/orgs/me");
+          if (Array.isArray(orgs) && orgs.length > 0) {
+            localStorage.setItem("active_org_id", orgs[0].id);
+          }
+        } else {
+          localStorage.removeItem("active_org_id");
+        }
+      } catch (e) {
+        console.warn("Could not load orgs after login", e);
+      }
+      
       window.location.href = "/dashboard";
     } catch (err: any) {
       console.error("❌ Login failed:", err.message);

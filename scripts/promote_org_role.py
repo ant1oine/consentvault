@@ -6,7 +6,7 @@ import sys
 sys.path.append(os.path.abspath(os.path.dirname(os.path.abspath(__file__)) + "/.."))
 
 from app.db import SessionLocal, Org, User, OrgUser
-from app.utils.audit import record_audit
+from app.services.audit_service import log_event
 
 
 def main():
@@ -65,10 +65,20 @@ def main():
         org_user.role = new_role
         db.commit()
         
-        record_audit(
-            "user_role_changed",
-            "superadmin",
-            {
+        # Create a mock actor object for superadmin
+        class SuperadminActor:
+            def __init__(self, email):
+                self.email = email
+        
+        actor = SuperadminActor("superadmin")
+        log_event(
+            db=db,
+            actor=actor,
+            action="user_role_changed",
+            entity_type="org_user",
+            entity_id=org_user.id,
+            org_id=org.id,
+            metadata={
                 "user_email": email,
                 "org": org_name,
                 "old_role": old_role,

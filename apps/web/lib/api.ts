@@ -14,10 +14,10 @@ export const getBaseUrl = () => {
   // For server-side (SSR), we could use the Docker hostname, but client-side is what matters here
   if (typeof window !== "undefined") {
     // Client-side: use localhost since browser runs on host machine
-    return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/v1";
+    return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   }
   // Server-side: could use Docker hostname, but default to localhost for consistency
-  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/v1";
+  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 };
 
 export async function apiFetch(path: string, options: RequestInit = {}) {
@@ -28,6 +28,10 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
   headers.set("Content-Type", "application/json");
 
   if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  // Always include org header if available
+  const activeOrgId = typeof window !== "undefined" ? localStorage.getItem("active_org_id") : null;
+  if (activeOrgId) headers.set("X-Org-ID", activeOrgId);
 
   const baseUrl = getBaseUrl();
   const url = `${baseUrl}${path}`;

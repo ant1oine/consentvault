@@ -20,31 +20,7 @@ export default function ConsentsPage() {
     (async () => {
       try {
         setLoading(true);
-        // Use legacy endpoint which supports JWT auth (root level, not /v1)
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/v1";
-        const apiBase = baseUrl.replace("/v1", ""); // Remove /v1 to access root-level endpoint
-        const token =
-          typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-
-        const headers: HeadersInit = {
-          "Content-Type": "application/json",
-        };
-        if (token) {
-          headers["Authorization"] = `Bearer ${token}`;
-        }
-
-        const res = await fetch(`${apiBase}/consents?limit=100`, { headers });
-        if (!res.ok) {
-          if (res.status === 401) {
-            if (typeof window !== "undefined") {
-              localStorage.removeItem("access_token");
-              window.dispatchEvent(new CustomEvent("auth-expired"));
-            }
-            throw new Error("Authentication expired. Please log in again.");
-          }
-          throw new Error(`API request failed: ${res.status}`);
-        }
-        const data = await res.json();
+        const data = await apiFetch("/consents?limit=100");
         setConsents(data || []);
       } catch (err: any) {
         setError(err.message || "Failed to load consents");

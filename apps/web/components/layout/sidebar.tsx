@@ -10,22 +10,16 @@ import {
   ShieldCheck,
   Activity,
 } from "lucide-react";
-import { apiFetch } from "@/lib/api";
+import { getMe } from "@/lib/api";
 
 export default function Sidebar() {
   const pathname = usePathname();
   const [user, setUser] = useState<{ email: string; role: string } | null>(null);
 
   useEffect(() => {
-    async function fetchUser() {
-      try {
-        const data = await apiFetch("/auth/me");
-        setUser(data);
-      } catch (err) {
-        console.error("Failed to fetch user info:", err);
-      }
-    }
-    fetchUser();
+    getMe()
+      .then(setUser)
+      .catch(() => setUser(null));
   }, []);
 
   const links = [
@@ -60,9 +54,7 @@ export default function Sidebar() {
       <div className="text-xs text-gray-400 px-4 pb-4">
         {user ? (
           <>
-            Logged in as:{" "}
-            <span className="text-gray-600">{user.email}</span> <br />
-            Role: <span className="text-gray-600">{user.role}</span>
+            Logged in as: <span className="text-gray-600">{user.email}</span>
           </>
         ) : (
           "Loading user..."

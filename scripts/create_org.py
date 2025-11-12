@@ -7,7 +7,7 @@ sys.path.append(os.path.abspath(os.path.dirname(os.path.abspath(__file__)) + "/.
 import secrets
 
 from app.db import SessionLocal, Org
-from app.utils.audit import record_audit
+from app.services.audit_service import log_event
 
 
 def main():
@@ -21,7 +21,16 @@ def main():
         db.commit()
         db.refresh(org)
         
-        record_audit("org_created", "superadmin", {"org": name, "region": region, "org_id": str(org.id)})
+        # Use the org itself as the actor context
+        log_event(
+            db=db,
+            actor=org,
+            action="org_created",
+            entity_type="org",
+            entity_id=org.id,
+            org_id=org.id,
+            metadata={"org": name, "region": region, "org_id": str(org.id)}
+        )
         
         print(f"✅ Created org {org.name} ({org.id})")
         print(f"   API Key: {org.api_key}")

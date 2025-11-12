@@ -11,7 +11,7 @@ from app.deps import get_current_org, get_org_by_api_key, get_current_user_optio
 from app.schemas import ConsentCreate, ConsentOut
 from app.security import compute_version_hash
 from app.security.roles import get_user_org_membership
-from app.services.audit_service import log_action
+from app.services.audit_service import log_event
 
 router = APIRouter(prefix="/consents", tags=["Consents"])
 
@@ -72,12 +72,14 @@ def create_consent(
     db.refresh(consent)
 
     # Log audit action
-    log_action(
-        org_id=org.id,
-        user_email=None,  # API key auth, no user email
+    # For API key auth, we use the org as the "actor" context
+    log_event(
+        db=db,
+        actor=org,  # Use org as actor context for API key auth
         action="created",
         entity_type="consent",
         entity_id=consent.id,
+        org_id=org.id,
         metadata={
             "subject_email": consent.subject_email,
             "purpose": consent.purpose,
@@ -187,12 +189,14 @@ def revoke_consent(
     db.commit()
 
     # Log audit action
-    log_action(
-        org_id=org.id,
-        user_email=None,  # API key auth, no user email
+    # For API key auth, we use the org as the "actor" context
+    log_event(
+        db=db,
+        actor=org,  # Use org as actor context for API key auth
         action="revoked",
         entity_type="consent",
         entity_id=consent.id,
+        org_id=org.id,
         metadata={"subject_email": consent.subject_email, "purpose": consent.purpose},
     )
 

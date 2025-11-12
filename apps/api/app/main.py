@@ -68,19 +68,18 @@ else:
         allow_headers=["*"],
     )
 
-# ✅ Mount all main routers under /v1
-v1_prefix = "/v1"
-app.include_router(auth.router, prefix=v1_prefix)
-app.include_router(orgs.router, prefix=v1_prefix)
-app.include_router(users.router, prefix=v1_prefix)
-app.include_router(consents.router, prefix=v1_prefix)
-app.include_router(audit.router, prefix=v1_prefix)
-app.include_router(data_rights.router, prefix=v1_prefix)
-app.include_router(export.router, prefix=v1_prefix)
-app.include_router(dashboard.router, prefix=v1_prefix)
-app.include_router(widget.router, prefix=v1_prefix)
-app.include_router(billing.router, prefix=v1_prefix)
-app.include_router(test.router, prefix=v1_prefix)
+# Mount all main routers (no /v1 prefix)
+app.include_router(auth.router)
+app.include_router(orgs.router)
+app.include_router(users.router)
+app.include_router(consents.router)
+app.include_router(audit.router)
+app.include_router(data_rights.router)
+app.include_router(export.router)
+app.include_router(dashboard.router)
+app.include_router(widget.router)
+app.include_router(billing.router)
+app.include_router(test.router)
 
 # Keep health endpoint simple
 app.include_router(health.router)

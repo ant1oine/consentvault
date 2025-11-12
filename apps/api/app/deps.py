@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.db import Org, OrgUser, User, get_db
 from app.security import verify_token
+from app.security.permissions import has_minimum_role
 
 security = HTTPBearer()
 security_optional = HTTPBearer(auto_error=False)
@@ -185,14 +186,10 @@ def require_role(required_role: str):
                 detail="User is not a member of this organization",
             )
 
-        role_hierarchy = {"viewer": 1, "editor": 2, "admin": 3}
-        user_level = role_hierarchy.get(membership.role, 0)
-        required_level = role_hierarchy.get(required_role, 0)
-
-        if user_level < required_level:
+        if not has_minimum_role(membership.role, required_role):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Requires {required_role} role or higher",
+                detail=f"Requires '{required_role}' permission or higher for orgs",
             )
 
         return membership

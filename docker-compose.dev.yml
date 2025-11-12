@@ -47,7 +47,7 @@ services:
       - PNPM_STORE_DIR=/app/.pnpm-store
       - NODE_ENV=development
       # Use localhost for client-side requests since browsers run on host machine
-      - NEXT_PUBLIC_API_URL=http://localhost:8000/v1
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
     volumes:
       - ./apps/web:/app/apps/web
       - /app/apps/web/node_modules

@@ -137,12 +137,17 @@ class Consent(Base):
 
 
 class AuditLog(Base):
-    """Audit log model for tracking all actions."""
+    """Audit log model for tracking all actions.
+    
+    Note: org_id is required (non-nullable) to ensure all audit events are properly
+    scoped to an organization. This guarantees that org admins can always see
+    activities related to their organization, even when triggered by superadmins.
+    """
 
     __tablename__ = "audit_logs"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    org_id = Column(UUID(as_uuid=True), ForeignKey("orgs.id"), nullable=True, index=True)
+    org_id = Column(UUID(as_uuid=True), ForeignKey("orgs.id"), nullable=False, index=True)
     user_email = Column(String(255), nullable=True)
     action = Column(String(100), nullable=False, index=True)
     entity_type = Column(String(100), nullable=False, index=True)

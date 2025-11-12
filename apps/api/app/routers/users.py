@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db import Org, OrgMember, get_db
 from app.schemas import OrgMemberCreate, OrgMemberOut
-from app.services.audit_service import log_action
+from app.services.audit_service import log_event
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -48,12 +48,14 @@ def create_user(
     db.refresh(user)
 
     # Log audit action
-    log_action(
-        org_id=user_data.org_id,
-        user_email=None,  # No authenticated user context
+    # For API key auth, we use the org as the "actor" context
+    log_event(
+        db=db,
+        actor=org,  # Use org as actor context for API key auth
         action="created",
         entity_type="org_member",
         entity_id=user.id,
+        org_id=user_data.org_id,
         metadata={
             "email": user.email,
             "name": user.name,
@@ -96,12 +98,15 @@ def delete_user(
         )
 
     # Log audit action before deletion
-    log_action(
-        org_id=user.org_id,
-        user_email=None,  # No authenticated user context
+    # For API key auth, we use the org as the "actor" context
+    org = db.query(Org).filter(Org.id == user.org_id).first()
+    log_event(
+        db=db,
+        actor=org if org else user,  # Use org as actor context for API key auth
         action="deleted",
         entity_type="org_member",
         entity_id=user_id,
+        org_id=user.org_id,
         metadata={"email": user.email, "name": user.name},
     )
 

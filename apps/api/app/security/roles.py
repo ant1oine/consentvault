@@ -2,6 +2,7 @@
 from sqlalchemy.orm import Session
 
 from app.db import OrgUser, User
+from app.security.permissions import can_role_write, can_role_view_sensitive
 
 
 def get_user_org_id(user: User, db: Session) -> str | None:
@@ -46,7 +47,11 @@ def can_write(user: User, db: Session) -> bool:
         return False
     
     # Support both 'manager' and 'editor' roles for backward compatibility
-    return org_user.role in ["admin", "manager", "editor"]
+    role = org_user.role
+    if role == "editor":
+        role = "manager"  # Map editor to manager for permission checks
+    
+    return can_role_write(role)
 
 
 def can_view_sensitive(user: User, db: Session) -> bool:
@@ -63,5 +68,11 @@ def can_view_sensitive(user: User, db: Session) -> bool:
         return False
     
     # Support both 'manager' and 'editor' roles for backward compatibility
-    return org_user.role in ["admin", "manager", "editor"]
+    role = org_user.role
+    if role == "editor":
+        role = "manager"  # Map editor to manager for permission checks
+    
+    return can_role_view_sensitive(role)
+
+
 

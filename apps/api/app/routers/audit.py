@@ -20,6 +20,10 @@ def get_audit_logs(
     Get audit logs scoped to user's organization.
     Superadmins see all logs; regular users see logs for their org.
     Viewers see limited logs (no sensitive actions).
+    
+    Note: org_id is now guaranteed to be non-null for all audit logs,
+    ensuring org admins can always see activities related to their organization,
+    even when triggered by superadmins.
     """
     from app.security.roles import get_user_org_membership, can_view_sensitive
     
@@ -65,6 +69,10 @@ def list_audit_logs(
     Superadmins can view all logs without org_id.
     Regular users see logs scoped to their organization.
     Viewers see limited logs (no sensitive actions).
+    
+    Note: org_id is now guaranteed to be non-null for all audit logs,
+    ensuring org admins can always see activities related to their organization,
+    even when triggered by superadmins.
     """
     from app.security.roles import get_user_org_membership, can_view_sensitive
     
