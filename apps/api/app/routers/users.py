@@ -8,7 +8,7 @@ from app.db import Org, OrgMember, get_db
 from app.schemas import OrgMemberCreate, OrgMemberOut
 from app.services.audit_service import log_action
 
-router = APIRouter(prefix="/v1/users", tags=["Users"])
+router = APIRouter(prefix="/users", tags=["Users"])
 
 
 @router.post("", response_model=OrgMemberOut, status_code=status.HTTP_201_CREATED)

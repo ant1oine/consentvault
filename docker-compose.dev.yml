@@ -40,16 +40,17 @@ services:
 
   web:
     build:
-      context: ./apps/web
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/web/Dockerfile
     container_name: consentvault-web
     environment:
       - PNPM_STORE_DIR=/app/.pnpm-store
       - NODE_ENV=development
-      - NEXT_PUBLIC_API_BASE_URL=http://api:8000
+      # Use localhost for client-side requests since browsers run on host machine
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/v1
     volumes:
-      - ./apps/web:/app
-      - /app/node_modules
+      - ./apps/web:/app/apps/web
+      - /app/apps/web/node_modules
       - /app/.pnpm-store
     ports:
       - "3000:3000"

@@ -2,17 +2,18 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Header, status
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
-from app.db import Consent, Org, get_db
-from app.deps import get_current_org, get_org_by_api_key, require_role
+from app.db import Consent, Org, User, get_db
+from app.deps import get_current_org, get_org_by_api_key, get_current_user_optional, get_current_user
 from app.schemas import ConsentCreate, ConsentOut
 from app.security import compute_version_hash
+from app.security.roles import get_user_org_membership
 from app.services.audit_service import log_action
 
-router = APIRouter(prefix="/v1/consents", tags=["Consents"])
+router = APIRouter(prefix="/consents", tags=["Consents"])
 
 
 @router.post("", response_model=ConsentOut, status_code=status.HTTP_201_CREATED)
@@ -89,17 +90,50 @@ def create_consent(
 
 @router.get("", response_model=list[ConsentOut])
 def list_consents(
+    x_api_key: str | None = Header(None, alias="X-API-Key"),
     subject_id: str | None = Query(None),
     subject_email: str | None = Query(None),
     purpose: str | None = Query(None),
     from_date: datetime | None = Query(None),
     to_date: datetime | None = Query(None),
     q: str | None = Query(None),
-    org: Org = Depends(get_org_by_api_key),
+    current_user: User | None = Depends(get_current_user_optional),
     db: Session = Depends(get_db),
 ):
-    """List consents with filters (requires API key)."""
-    query = db.query(Consent).filter(Consent.org_id == org.id)
+    """
+    List consents with filters.
+    Supports both X-API-Key header (for API integrations) and JWT auth (for dashboard).
+    Regular users see consents scoped to their organization.
+    """
+    # API key authentication (for API integrations)
+    if x_api_key:
+        org = db.query(Org).filter(Org.api_key == x_api_key).first()
+        if not org:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid API key",
+            )
+        query = db.query(Consent).filter(Consent.org_id == org.id)
+    else:
+        # JWT authentication (for dashboard)
+        if not current_user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required (API key or JWT token)",
+            )
+        
+        # Superadmins can view all consents
+        if current_user.is_superadmin:
+            query = db.query(Consent)
+        else:
+            # Regular users: scope to their organization
+            org_user = get_user_org_membership(current_user, db)
+            if not org_user:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="User not part of any organization",
+                )
+            query = db.query(Consent).filter(Consent.org_id == org_user.org_id)
 
     if subject_id:
         query = query.filter(Consent.subject_id == subject_id)

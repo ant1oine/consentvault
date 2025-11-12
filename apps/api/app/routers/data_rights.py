@@ -9,7 +9,7 @@ from app.deps import get_current_org, get_current_user, get_org_by_api_key, get_
 from app.schemas import DataRightRequestBase, DataRightRequestOut, DataRightRequestStatusUpdate
 from app.services.audit_service import log_action
 
-router = APIRouter(prefix="/v1/data-rights", tags=["Data Rights"])
+router = APIRouter(prefix="/data-rights", tags=["Data Rights"])
 
 
 @router.post("", response_model=DataRightRequestOut, status_code=status.HTTP_201_CREATED)
@@ -54,7 +54,10 @@ def list_data_rights(
     List Data Rights requests for the organization.
     Supports both X-API-Key header (for API integrations) and JWT auth (for dashboard).
     Superadmins can view all requests without org_id.
+    Regular users see requests scoped to their organization.
     """
+    from app.security.roles import get_user_org_membership
+    
     # API key authentication (for API integrations)
     if x_api_key:
         org = db.query(Org).filter(Org.api_key == x_api_key).first()
@@ -78,49 +81,35 @@ def list_data_rights(
             detail="Authentication required (API key or JWT token)",
         )
     
+    query = db.query(DataRightRequest).order_by(DataRightRequest.created_at.desc())
+    
     # Superadmins can view all requests
-    if current_user.is_superadmin and not org_id:
-        return (
-            db.query(DataRightRequest)
-            .order_by(DataRightRequest.created_at.desc())
-            .limit(100)
-            .all()
-        )
-    
-    # Regular users need org_id
-    if not org_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Organization ID required",
-        )
-    
-    # Verify org exists and user has access
-    org = db.query(Org).filter(Org.id == org_id).first()
-    if not org:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Organization not found",
-        )
-    
-    # For superadmins, allow access to any org; for regular users, check membership
-    if not current_user.is_superadmin:
-        membership = db.query(OrgUser).filter(
-            OrgUser.org_id == org_id,
-            OrgUser.user_id == current_user.id
-        ).first()
-        if not membership:
+    if current_user.is_superadmin:
+        if org_id:
+            # Superadmin can filter by specific org if requested
+            query = query.filter(DataRightRequest.org_id == org_id)
+    else:
+        # Regular users: scope to their organization
+        org_user = get_user_org_membership(current_user, db)
+        if not org_user:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="User is not a member of this organization",
+                detail="User not part of any organization",
             )
+        
+        # If org_id is provided, verify user has access to it
+        if org_id:
+            if org_id != org_user.org_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="User is not a member of this organization",
+                )
+            query = query.filter(DataRightRequest.org_id == org_id)
+        else:
+            # Auto-scope to user's org
+            query = query.filter(DataRightRequest.org_id == org_user.org_id)
     
-    return (
-        db.query(DataRightRequest)
-        .filter(DataRightRequest.org_id == org_id)
-        .order_by(DataRightRequest.created_at.desc())
-        .limit(100)
-        .all()
-    )
+    return query.limit(100).all()
 
 
 @router.post("/{request_id}/status", status_code=status.HTTP_200_OK)

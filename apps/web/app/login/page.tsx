@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { apiFetch } from "@/lib/api";
+import { setAccessToken } from "@/lib/auth";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -19,28 +21,16 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // ✅ Hard-code API for debugging to avoid NEXT_PUBLIC variable issues
-      const API_BASE = "http://localhost:8000/v1";
-      const url = `${API_BASE}/auth/login`;
-      console.log("🔍 Attempting login:", url); // Debug log
-
-      const res = await fetch(url, {
+      const data = await apiFetch("/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
 
-      console.log("🔍 Response status:", res.status);
-      const data = await res.json();
-      console.log("🔍 Response data:", data);
-
-      if (!res.ok) throw new Error(data.detail || "Invalid credentials");
-
-      localStorage.setItem("access_token", data.access_token);
+      setAccessToken(data.access_token);
       window.location.href = "/dashboard";
     } catch (err: any) {
       console.error("❌ Login failed:", err.message);
-      setError(err.message);
+      setError(err.message || "Invalid credentials");
     } finally {
       setLoading(false);
     }

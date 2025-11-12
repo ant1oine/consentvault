@@ -19,7 +19,13 @@ export default function CommandPalette() {
 
   const items = useMemo(() => PAGES, []);
 
+  // Check if user is authenticated via token
+  const isAuthenticated = typeof window !== "undefined" && !!localStorage.getItem("access_token");
+
   useEffect(() => {
+    // Only enable CommandPalette when authenticated
+    if (!isAuthenticated) return;
+
     const onKey = (e: KeyboardEvent) => {
       const meta = e.metaKey || e.ctrlKey;
       if (meta && e.key.toLowerCase() === "k") {
@@ -38,9 +44,10 @@ export default function CommandPalette() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, index, items, router]);
+  }, [open, index, items, router, isAuthenticated]);
 
-  if (!open) return null;
+  // Don't show CommandPalette if not authenticated
+  if (!isAuthenticated || !open) return null;
 
   // compute width by longest label
   const maxLabel = items.reduce((m, it) => (it.label.length > m.length ? it.label : m), "");

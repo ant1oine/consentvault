@@ -5,12 +5,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 from sqlalchemy.orm import Session
 
-from app.db import Org, OrgMember, OrgUser, User, get_db
+from app.db import Org, OrgMember, OrgUser, User, get_db, Consent, AuditLog, DataRightRequest
 from app.deps import get_current_user, require_role
 from app.schemas import OrgCreate, OrgDetailOut, OrgOut, OrgUserCreate
 from app.services.audit_service import log_action
 
-router = APIRouter(prefix="/v1/orgs", tags=["Organizations"])
+router = APIRouter(prefix="/orgs", tags=["Organizations"])
 
 
 @router.get("", response_model=list[OrgOut])
@@ -78,12 +78,45 @@ def create_org(
     return org
 
 
-@router.get("/{org_id}", response_model=OrgDetailOut)
+@router.get("/{org_id}")
 def get_org(
     org_id: UUID = Path(...),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Get organization details with users."""
+    # For superadmins, return detailed info with users from OrgUser
+    if current_user.is_superadmin:
+        org = db.query(Org).filter(Org.id == org_id).first()
+        if not org:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Organization not found",
+            )
+
+        # Get org users (OrgUser join User)
+        users = (
+            db.query(OrgUser, User)
+            .join(User, OrgUser.user_id == User.id)
+            .filter(OrgUser.org_id == org_id)
+            .all()
+        )
+
+        return {
+            "id": str(org.id),
+            "name": org.name,
+            "region": org.region if hasattr(org, "region") else "N/A",
+            "created_at": org.created_at.isoformat() if hasattr(org, "created_at") else None,
+            "users": [
+                {"email": user.email, "role": org_user.role}
+                for org_user, user in users
+            ],
+            "consents": db.query(Consent).filter(Consent.org_id == org.id).count(),
+            "api_logs": db.query(AuditLog).filter(AuditLog.org_id == org.id).count(),
+            "data_rights": db.query(DataRightRequest).filter(DataRightRequest.org_id == org.id).count(),
+        }
+    
+    # For regular users, use the original response model
     org = db.query(Org).filter(Org.id == org_id).first()
     if not org:
         raise HTTPException(

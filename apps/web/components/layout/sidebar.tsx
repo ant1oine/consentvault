@@ -10,7 +10,7 @@ import {
   ShieldCheck,
   Activity,
 } from "lucide-react";
-import { getMe } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -19,9 +19,8 @@ export default function Sidebar() {
   useEffect(() => {
     async function fetchUser() {
       try {
-        const data = await getMe();
-        // API now returns { email, role } directly
-        setUser({ email: data.email, role: data.role });
+        const data = await apiFetch("/auth/me");
+        setUser(data);
       } catch (err) {
         console.error("Failed to fetch user info:", err);
       }
